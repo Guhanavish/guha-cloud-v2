@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Guha Cloud - Login</title>
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <button id="themeToggle" class="btn btn-secondary btn-icon" aria-label="Toggle theme" style="position: fixed; top: 20px; right: 20px; z-index: 100;">
+    <i class="fas fa-moon"></i>
+  </button>
+  <div class="auth-container">
+    <div class="auth-card">
+      <div class="auth-header">
+        <h1>☁️ Guha Cloud</h1>
+        <p>Sign in to access your files</p>
+      </div>
+      <form id="loginForm" class="auth-form">
+        <div class="form-group">
+          <label for="identifier">Email or Username</label>
+          <input type="text" id="identifier" name="identifier" required autocomplete="username">
+        </div>
+        <div class="form-group">
+          <label for="password">Password</label>
+          <input type="password" id="password" name="password" required autocomplete="current-password">
+        </div>
+        <button type="submit" class="btn btn-primary btn-block">Sign In</button>
+      </form>
+      <div class="auth-footer">
+        <p>Single user system. No registration available.</p>
+      </div>
+      <div id="errorMessage" class="error-message hidden"></div>
+    </div>
+  </div>
+  <script src="/js/auth.js"></script>
+  <script>
+    // Theme toggle
+    const themeBtn = document.getElementById('themeToggle');
+    const html = document.documentElement;
+    const saved = localStorage.getItem('theme') || 'light';
+    html.setAttribute('data-theme', saved);
+    themeBtn.innerHTML = saved === 'dark' ? '<i class="fas fa-sun"></i>' : '<i class="fas fa-moon"></i>';
+    
+    themeBtn.addEventListener('click', () => {
+      const isDark = html.getAttribute('data-theme') === 'dark';
+      html.setAttribute('data-theme', isDark ? 'light' : 'dark');
+      localStorage.setItem('theme', isDark ? 'light' : 'dark');
+      themeBtn.innerHTML = isDark ? '<i class="fas fa-moon"></i>' : '<i class="fas fa-sun"></i>';
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Guha Cloud - Dashboard</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+  <header class="header">
+    <div class="header-left">
+      <button id="homeBtn" class="btn btn-secondary" title="Home" style="width:36px;height:36px;padding:0;border-radius:50%"><i class="fas fa-home"></i></button>
+      <h1 class="logo">Guha Cloud</h1>
+      <nav class="breadcrumb" id="breadcrumb"></nav>
+    </div>
+    <div class="header-center">
+      <div class="search-box">
+        <i class="fas fa-search"></i>
+        <input type="text" id="searchInput" placeholder="Search files..." autocomplete="off">
+      </div>
+    </div>
+    <div class="header-right">
+      <div class="storage-status" id="storageStatus">
+        <i class="fas fa-database storage-icon"></i>
+        <div class="storage-bar">
+          <div class="storage-fill" id="storageFill" style="width: 0%"></div>
+        </div>
+        <span class="storage-text"><span id="storageUsed">0 B</span> / <span id="storageTotal">1 GB</span></span>
+      </div>
+      <select id="sortSelect" class="sort-select">
+        <option value="-created_at">Newest First</option>
+        <option value="created_at">Oldest First</option>
+        <option value="originalName">Name A-Z</option>
+        <option value="-originalName">Name Z-A</option>
+        <option value="-size">Size: Largest</option>
+        <option value="size">Size: Smallest</option>
+      </select>
+      <button id="newFolderBtn" class="btn btn-primary btn-sm"><i class="fas fa-folder-plus"></i><span>New</span></button>
+      <button id="uploadBtn" class="btn btn-secondary btn-sm"><i class="fas fa-upload"></i><span>Upload</span></button>
+      <input type="file" id="fileInput" multiple style="display: none;">
+      <button id="themeToggle" class="btn btn-secondary" aria-label="Toggle dark mode"><i class="fas fa-moon"></i></button>
+      <div class="user-menu">
+        <button id="userMenuBtn" class="user-menu-btn">
+          <i class="fas fa-user-circle"></i> <i class="fas fa-chevron-down"></i>
+        </button>
+        <div id="userDropdown" class="user-dropdown hidden">
+          <button id="changeUsernameBtn" class="dropdown-item"><i class="fas fa-user-edit"></i> Change Username</button>
+          <button id="changePasswordBtn" class="dropdown-item"><i class="fas fa-lock"></i> Change Password</button>
+          <div class="dropdown-divider"></div>
+          <button id="logoutBtn" class="dropdown-item danger"><i class="fas fa-sign-out-alt"></i> Logout</button>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div class="main-container">
+    <aside class="sidebar">
+      <div class="sidebar-section">
+        <h3 class="sidebar-title">Folders</h3>
+        <ul class="folder-tree" id="folderTree">
+          <li class="folder-item active" data-folder-id="root">
+            <div class="folder-item-content"><i class="fas fa-home"></i> <span>All Files</span></div>
+          </li>
+        </ul>
+      </div>
+    </aside>
+
+    <main class="content">
+      <div class="toolbar">
+        <div class="toolbar-left">
+          <span class="selection-count hidden" id="selectionCount"><span id="selectedCount">0</span> selected</span>
+        </div>
+        <div class="toolbar-right">
+          <button id="downloadSelectedBtn" class="btn btn-secondary btn-sm" disabled><i class="fas fa-download"></i> Download</button>
+          <button id="deleteSelectedBtn" class="btn btn-danger btn-sm" disabled><i class="fas fa-trash"></i> Delete</button>
+        </div>
+      </div>
+
+      <div class="file-grid" id="fileGrid"></div>
+
+      <div class="empty-state hidden" id="emptyState">
+        <i class="fas fa-folder-open"></i>
+        <h3>This folder is empty</h3>
+        <p>Drag & drop files here or click Upload</p>
+        <button id="emptyUploadBtn" class="btn btn-primary"><i class="fas fa-upload"></i> Upload Files</button>
+      </div>
+
+      <div class="pagination hidden" id="pagination">
+        <button id="prevPage" class="btn btn-secondary btn-sm"><i class="fas fa-chevron-left"></i> Previous</button>
+        <span id="pageInfo">Page 1 of 1</span>
+        <button id="nextPage" class="btn btn-secondary btn-sm">Next <i class="fas fa-chevron-right"></i></button>
+      </div>
+    </main>
+  </div>
+
+  <div id="folderModal" class="modal hidden">
+    <div class="modal-overlay"></div>
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 id="folderModalTitle">New Folder</h3>
+        <button class="modal-close">&times;</button>
+      </div>
+      <form id="folderForm">
+        <div class="form-group">
+          <label for="folderName">Folder Name</label>
+          <input type="text" id="folderName" required maxlength="255">
+        </div>
+        <div class="modal-actions">
+          <button type="button" id="cancelFolderBtn" class="btn btn-secondary">Cancel</button>
+          <button type="submit" class="btn btn-primary">Create</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="renameModal" class="modal hidden">
+    <div class="modal-overlay"></div>
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Rename</h3>
+        <button class="modal-close">&times;</button>
+      </div>
+      <form id="renameForm">
+        <div class="form-group">
+          <label for="renameName">New Name</label>
+          <input type="text" id="renameName" required maxlength="255">
+        </div>
+        <input type="hidden" id="renameId">
+        <input type="hidden" id="renameType" value="file">
+        <div class="modal-actions">
+          <button type="button" id="cancelRenameBtn" class="btn btn-secondary">Cancel</button>
+          <button type="submit" class="btn btn-primary">Rename</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="usernameModal" class="modal hidden">
+    <div class="modal-overlay"></div>
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Change Username</h3>
+        <button class="modal-close">&times;</button>
+      </div>
+      <form id="usernameForm">
+        <div class="form-group">
+          <label for="newUsername">New Username</label>
+          <input type="text" id="newUsername" required maxlength="30" pattern="[a-zA-Z0-9_]+">
+          <small>3-30 characters, letters, numbers, underscores only</small>
+        </div>
+        <div class="modal-actions">
+          <button type="button" id="cancelUsernameBtn" class="btn btn-secondary">Cancel</button>
+          <button type="submit" class="btn btn-primary">Change</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div id="passwordModal" class="modal hidden">
+    <div class="modal-overlay"></div>
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Change Password</h3>
+        <button class="modal-close">&times;</button>
+      </div>
+      <form id="passwordForm">
+        <div class="form-group">
+          <label for="currentPassword">Current Password</label>
+          <input type="password" id="currentPassword" required>
+        </div>
+        <div class="form-group">
+          <label for="newPassword">New Password</label>
+          <input type="password" id="newPassword" required minlength="8">
+          <small>At least 8 characters</small>
+        </div>
+        <div class="form-group">
+          <label for="confirmNewPassword">Confirm New Password</label>
+          <input type="password" id="confirmNewPassword" required>
+        </div>
+        <div class="modal-actions">
+          <button type="button" id="cancelPasswordBtn" class="btn btn-secondary">Cancel</button>
+          <button type="submit" class="btn btn-primary">Change</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="/js/dashboard.js"></script>
+</body>
+</html>
