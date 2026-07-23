@@ -52,9 +52,12 @@ async function api(url, options = {}) {
   return data;
 }
 
+let _statsSeq = 0;
 async function loadStorageStats() {
+  const seq = ++_statsSeq;
   try {
     const { stats } = await api('/files/stats');
+    if (seq !== _statsSeq) return;
     const backend = backendSelect?.value || 'supabase';
     const info = stats[backend];
     if (info) {
@@ -288,7 +291,10 @@ async function uploadFiles(files) {
         setTimeout(() => { items.forEach(i => i.item.remove()); if (!container.children.length) container.remove(); }, 2000);
         loadFiles(); loadUser();
       } else {
-        items.forEach(i => { i.status.textContent = 'Failed'; i.item.classList.add('error'); });
+        let msg = 'Failed';
+        try { const err = JSON.parse(xhr.responseText); msg = err.error || msg; } catch {}
+        items.forEach(i => { i.status.textContent = msg; i.item.classList.add('error'); });
+        setTimeout(() => { items.forEach(i => i.item.remove()); if (!container.children.length) container.remove(); }, 5000);
       }
     };
 

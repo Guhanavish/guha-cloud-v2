@@ -19,7 +19,8 @@ const b2Provider = {
     const bucketId = process.env.B2_BUCKET_ID;
     if (!bucketId) throw new Error('B2_BUCKET_ID not set in .env');
 
-    const fileName = `${userId}/${Date.now()}-${file.originalname}`;
+    const safeName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
+    const fileName = `${userId}/${Date.now()}-${safeName}`;
 
     const response = await b2.uploadFile({
       bucketId,
@@ -28,11 +29,13 @@ const b2Provider = {
       contentType: file.mimetype
     });
 
-    if (!response?.data?.fileId) {
+    const body = response?.data;
+    if (!body?.fileId) {
+      console.error('B2 upload response:', JSON.stringify(body));
       throw new Error('B2 upload failed: no fileId returned');
     }
 
-    return { path: response.data.fileId, b2FileName: fileName };
+    return { path: body.fileId, b2FileName: fileName };
   },
 
   async download(fileRecord) {
@@ -48,6 +51,10 @@ const b2Provider = {
     await b2.authorize();
 
     const { data: fileInfo } = await b2.getFileInfo({ fileId: fileRecord.path });
+    if (!fileInfo) {
+      console.error('B2 getFileInfo returned no data for fileId:', fileRecord.path);
+      return;
+    }
     await b2.deleteFileVersion({
       fileId: fileRecord.path,
       fileName: fileInfo.fileName

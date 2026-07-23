@@ -87,8 +87,8 @@ app.use('/uploads', express.static(path.join(__dirname, '..', 'public', 'uploads
 
 app.get('/api/config', (req, res) => {
   res.json({
-    defaultStorageBackend: process.env.DEFAULT_STORAGE_BACKEND || 'local',
-    storageBackends: ['local', 'supabase', 'b2']
+    defaultStorageBackend: process.env.DEFAULT_STORAGE_BACKEND || 'supabase',
+    storageBackends: ['supabase', 'b2']
   });
 });
 
