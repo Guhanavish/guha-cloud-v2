@@ -621,7 +621,19 @@ body {
   margin-bottom: 4px;
 }
 
-.file-meta { font-size: 11px; color: var(--text-muted); }
+.file-meta { font-size: 11px; color: var(--text-muted); display: flex; align-items: center; gap: 4px; flex-wrap: wrap; justify-content: center; }
+
+.storage-badge {
+  font-size: 9px;
+  padding: 1px 6px;
+  border-radius: 8px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+.storage-badge.local { background: rgba(99, 102, 241, 0.12); color: var(--primary); }
+.storage-badge.supabase { background: rgba(34, 197, 94, 0.12); color: var(--success); }
+.storage-badge.b2 { background: rgba(234, 179, 8, 0.12); color: var(--warning); }
 
 .file-checkbox {
   position: absolute;

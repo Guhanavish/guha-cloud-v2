@@ -36,6 +36,11 @@
         <option value="-size">Size: Largest</option>
         <option value="size">Size: Smallest</option>
       </select>
+      <select id="storageSelect" class="sort-select" title="Storage backend">
+        <option value="local">Local</option>
+        <option value="supabase">Supabase</option>
+        <option value="b2">Backblaze B2</option>
+      </select>
       <button id="newFolderBtn" class="btn btn-primary btn-sm"><i class="fas fa-folder-plus"></i><span>New</span></button>
       <button id="uploadBtn" class="btn btn-secondary btn-sm"><i class="fas fa-upload"></i><span>Upload</span></button>
       <input type="file" id="fileInput" multiple style="display: none;">

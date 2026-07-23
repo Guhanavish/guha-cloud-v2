@@ -1,4 +1,5 @@
 const supabase = require('../lib/supabase');
+const storage = require('../services/storage');
 
 const Folder = {
   async create({ name, owner, parent }) {
@@ -48,15 +49,17 @@ const Folder = {
   },
 
   async delete(id) {
-    // Recursive delete - get all children first
     const deleteRecursive = async (folderId) => {
       const { data: children } = await supabase.from('guha_cloud_folders').select('id').eq('parent_id', folderId);
       for (const child of children || []) {
         await deleteRecursive(child.id);
       }
-      // Delete files in this folder
+      // Delete files from storage backend and database
+      const { data: files } = await supabase.from('guha_cloud_files').select('*').eq('folder_id', folderId);
+      for (const file of files || []) {
+        await storage.deleteFile(file).catch(() => {});
+      }
       await supabase.from('guha_cloud_files').delete().eq('folder_id', folderId);
-      // Delete the folder
       await supabase.from('guha_cloud_folders').delete().eq('id', folderId);
     };
     

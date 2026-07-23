@@ -62,6 +62,8 @@ CREATE TABLE guha_cloud_files (
     public_id UUID UNIQUE,
     download_count INTEGER DEFAULT 0,
     last_accessed TIMESTAMPTZ DEFAULT NOW(),
+    storage_backend VARCHAR(20) DEFAULT 'local',
+    b2_file_name TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -217,4 +219,10 @@ BEGIN
     )
     SELECT id, name FROM folder_path ORDER BY level DESC;
 END;
+
+-- ============================================
+-- MIGRATION: Add storage_backend column
+-- ============================================
+ALTER TABLE guha_cloud_files ADD COLUMN IF NOT EXISTS storage_backend VARCHAR(20) DEFAULT 'local';
+ALTER TABLE guha_cloud_files ADD COLUMN IF NOT EXISTS b2_file_name TEXT;
 $$ LANGUAGE plpgsql;

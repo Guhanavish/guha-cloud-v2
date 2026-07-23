@@ -182,7 +182,7 @@ function renderFiles(files) {
       <input type="checkbox" class="file-checkbox" ${selectedItems.has(f.id) ? 'checked' : ''}>
       <i class="file-icon fas ${getFileIcon(f.mime_type)}"></i>
       <div class="file-name" title="${escapeHtml(f.original_name)}">${escapeHtml(f.original_name)}</div>
-      <div class="file-meta">${formatBytes(f.size)} • ${new Date(f.created_at).toLocaleDateString()}</div>
+      <div class="file-meta">${formatBytes(f.size)} • ${new Date(f.created_at).toLocaleDateString()} <span class="storage-badge ${f.storage_backend || 'local'}">${(f.storage_backend || 'local') === 'local' ? 'Local' : (f.storage_backend === 'b2' ? 'B2' : 'Supabase')}</span></div>
     </div>
   `).join('');
 
@@ -293,6 +293,7 @@ async function uploadFiles(files) {
   const formData = new FormData();
   files.forEach(f => formData.append('files', f));
   if (currentFolder !== 'root') formData.append('folderId', currentFolder);
+  formData.append('storageBackend', document.getElementById('storageSelect').value);
 
   const uploadContainer = document.getElementById('uploadProgress') || createUploadContainer();
   const items = [];

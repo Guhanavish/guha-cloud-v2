@@ -4,6 +4,7 @@ const File = require('../models/File');
 const Folder = require('../models/Folder');
 const User = require('../models/User');
 const AppError = require('../utils/AppError');
+const storage = require('../services/storage');
 
 exports.uploadFiles = async (req, res, next) => {
   try {
@@ -11,26 +12,30 @@ exports.uploadFiles = async (req, res, next) => {
       return next(new AppError('No files uploaded', 400));
     }
 
-    const { folderId } = req.body;
+    const { folderId, storageBackend = 'local' } = req.body;
     const uploadedFiles = [];
 
     for (const file of req.files) {
       const user = await User.findById(req.user.id);
       const stats = await File.getStorageStats(user.id);
       
-      if (stats.total_size + file.size > user.storage_limit) {
+      if (stats.totalSize + file.size > user.storage_limit) {
         await fs.unlink(file.path).catch(() => {});
         return next(new AppError(`Not enough storage for ${file.originalname}`, 400));
       }
+
+      const result = await storage.upload(file, req.user.id, storageBackend);
 
       const fileDoc = await File.create({
         originalName: file.originalname,
         storedName: file.filename,
         mimeType: file.mimetype,
         size: file.size,
-        path: file.path,
+        path: result.path,
         ownerId: req.user.id,
-        folderId: folderId || null
+        folderId: folderId || null,
+        storageBackend,
+        b2FileName: result.b2FileName || null
       });
 
       await User.update(req.user.id, { storage_used: user.storage_used + file.size });
@@ -90,13 +95,22 @@ exports.getFile = async (req, res, next) => {
 
 exports.downloadFile = async (req, res, next) => {
   try {
-    const file = await File.findById(req.params.id);
-    if (!file || file.owner_id !== req.user.id) {
+    const fileRecord = await File.findById(req.params.id);
+    if (!fileRecord || fileRecord.owner_id !== req.user.id) {
       return next(new AppError('File not found', 404));
     }
 
-    await File.incrementDownload(file.id);
-    res.download(file.path, file.original_name);
+    await File.incrementDownload(fileRecord.id);
+    const result = await storage.download(fileRecord);
+
+    if (result.url) {
+      return res.redirect(result.url);
+    }
+    if (result.buffer) {
+      res.setHeader('Content-Disposition', `attachment; filename="${fileRecord.original_name}"`);
+      return res.send(result.buffer);
+    }
+    res.download(result.filePath, result.fileName);
   } catch (error) {
     next(error);
   }
@@ -104,16 +118,16 @@ exports.downloadFile = async (req, res, next) => {
 
 exports.deleteFile = async (req, res, next) => {
   try {
-    const file = await File.findById(req.params.id);
-    if (!file || file.owner_id !== req.user.id) {
+    const fileRecord = await File.findById(req.params.id);
+    if (!fileRecord || fileRecord.owner_id !== req.user.id) {
       return next(new AppError('File not found', 404));
     }
 
-    await fs.unlink(file.path).catch(() => {});
-    
+    await storage.deleteFile(fileRecord);
+
     const user = await User.findById(req.user.id);
-    await File.delete(file.id);
-    await User.update(req.user.id, { storage_used: Math.max(0, user.storage_used - file.size) });
+    await File.delete(fileRecord.id);
+    await User.update(req.user.id, { storage_used: Math.max(0, user.storage_used - fileRecord.size) });
 
     res.json({ message: 'File deleted successfully' });
   } catch (error) {

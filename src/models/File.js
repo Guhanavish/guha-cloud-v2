@@ -2,7 +2,7 @@ const supabase = require('../lib/supabase');
 const { v4: uuidv4 } = require('uuid');
 
 const File = {
-  async create({ originalName, storedName, mimeType, size, path, ownerId, folderId }) {
+  async create({ originalName, storedName, mimeType, size, path, ownerId, folderId, storageBackend, b2FileName }) {
     const fileData = {
       original_name: originalName,
       stored_name: storedName,
@@ -13,7 +13,9 @@ const File = {
       folder_id: folderId || null,
       is_public: false,
       download_count: 0,
-      last_accessed: new Date().toISOString()
+      last_accessed: new Date().toISOString(),
+      storage_backend: storageBackend || 'local',
+      b2_file_name: b2FileName || null
     };
 
     const { data, error } = await supabase
