@@ -1,4 +1,3 @@
-const fs = require('fs').promises;
 const path = require('path');
 const File = require('../models/File');
 const Folder = require('../models/Folder');
@@ -12,23 +11,23 @@ exports.uploadFiles = async (req, res, next) => {
       return next(new AppError('No files uploaded', 400));
     }
 
-    const { folderId, storageBackend = 'local' } = req.body;
+    const defaultBackend = process.env.DEFAULT_STORAGE_BACKEND || 'supabase';
+    const { folderId, storageBackend = defaultBackend } = req.body;
     const uploadedFiles = [];
 
     for (const file of req.files) {
-      const user = await User.findById(req.user.id);
-      const stats = await File.getStorageStats(user.id);
-      
-      if (stats.totalSize + file.size > user.storage_limit) {
-        await fs.unlink(file.path).catch(() => {});
-        return next(new AppError(`Not enough storage for ${file.originalname}`, 400));
+      const sizeByBackend = await File.getTotalSizeByBackend(req.user.id, storageBackend);
+      const limit = storage.getBackendLimit(storageBackend);
+
+      if (sizeByBackend + file.size > limit) {
+        return next(new AppError(`Not enough storage on ${storageBackend} for ${file.originalname}`, 400));
       }
 
       const result = await storage.upload(file, req.user.id, storageBackend);
 
       const fileDoc = await File.create({
         originalName: file.originalname,
-        storedName: file.filename,
+        storedName: file.originalname,
         mimeType: file.mimetype,
         size: file.size,
         path: result.path,
@@ -38,16 +37,11 @@ exports.uploadFiles = async (req, res, next) => {
         b2FileName: result.b2FileName || null
       });
 
-      await User.update(req.user.id, { storage_used: user.storage_used + file.size });
-
       uploadedFiles.push(fileDoc);
     }
 
     res.status(201).json({ message: 'Files uploaded successfully', files: uploadedFiles });
   } catch (error) {
-    if (req.files) {
-      await Promise.all(req.files.map(f => fs.unlink(f.path).catch(() => {})));
-    }
     next(error);
   }
 };
@@ -110,7 +104,7 @@ exports.downloadFile = async (req, res, next) => {
       res.setHeader('Content-Disposition', `attachment; filename="${fileRecord.original_name}"`);
       return res.send(result.buffer);
     }
-    res.download(result.filePath, result.fileName);
+    return next(new AppError('Download failed', 500));
   } catch (error) {
     next(error);
   }
@@ -124,10 +118,7 @@ exports.deleteFile = async (req, res, next) => {
     }
 
     await storage.deleteFile(fileRecord);
-
-    const user = await User.findById(req.user.id);
     await File.delete(fileRecord.id);
-    await User.update(req.user.id, { storage_used: Math.max(0, user.storage_used - fileRecord.size) });
 
     res.json({ message: 'File deleted successfully' });
   } catch (error) {
@@ -161,7 +152,7 @@ exports.moveFile = async (req, res, next) => {
   try {
     const { folderId } = req.body;
     const file = await File.findById(req.params.id);
-    
+
     if (!file || file.owner_id !== req.user.id) {
       return next(new AppError('File not found', 404));
     }
@@ -182,15 +173,20 @@ exports.moveFile = async (req, res, next) => {
 
 exports.getStorageStats = async (req, res, next) => {
   try {
-    const stats = await File.getStorageStats(req.user.id);
-    const user = await User.findById(req.user.id);
-    
-    res.json({
-      used: stats.totalSize || 0,
-      limit: user.storage_limit,
-      available: user.storage_limit - (stats.totalSize || 0),
-      fileCount: stats.fileCount || 0
-    });
+    const { backend } = req.query;
+    const backends = backend ? [backend] : ['supabase', 'b2'];
+    const stats = {};
+
+    for (const b of backends) {
+      const used = await File.getTotalSizeByBackend(req.user.id, b);
+      stats[b] = {
+        used,
+        limit: storage.getBackendLimit(b),
+        available: storage.getBackendLimit(b) - used
+      };
+    }
+
+    res.json({ stats });
   } catch (error) {
     next(error);
   }

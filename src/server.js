@@ -85,6 +85,13 @@ const publicPath = path.join(__dirname, '..', 'public');
 app.use(express.static(publicPath));
 app.use('/uploads', express.static(path.join(__dirname, '..', 'public', 'uploads')));
 
+app.get('/api/config', (req, res) => {
+  res.json({
+    defaultStorageBackend: process.env.DEFAULT_STORAGE_BACKEND || 'local',
+    storageBackends: ['local', 'supabase', 'b2']
+  });
+});
+
 app.use('/api/auth', authRoutes);
 app.use('/api/files', authenticate, fileRoutes);
 app.use('/api/folders', authenticate, folderRoutes);

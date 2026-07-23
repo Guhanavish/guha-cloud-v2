@@ -8,6 +8,14 @@ const localProvider = {
   },
 
   async download(fileRecord) {
+    try {
+      await fs.access(fileRecord.path);
+    } catch {
+      throw Object.assign(new Error('File not found on local storage (may have been lost during server restart)'), {
+        statusCode: 404,
+        code: 'FILE_NOT_FOUND'
+      });
+    }
     return { filePath: fileRecord.path, fileName: fileRecord.original_name };
   },
 

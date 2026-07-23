@@ -2,15 +2,17 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Guha Cloud - Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Guha Cloud</title>
   <link rel="stylesheet" href="/css/style.css">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
+  <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+
   <header class="header">
     <div class="header-left">
-      <button id="homeBtn" class="btn btn-secondary" title="Home" style="width:36px;height:36px;padding:0;border-radius:50%"><i class="fas fa-home"></i></button>
+      <button id="menuToggle" class="btn btn-secondary btn-icon" style="display:none"><i class="fas fa-bars"></i></button>
       <h1 class="logo">Guha Cloud</h1>
       <nav class="breadcrumb" id="breadcrumb"></nav>
     </div>
@@ -21,34 +23,29 @@
       </div>
     </div>
     <div class="header-right">
-      <div class="storage-status" id="storageStatus">
-        <i class="fas fa-database storage-icon"></i>
-        <div class="storage-bar">
-          <div class="storage-fill" id="storageFill" style="width: 0%"></div>
-        </div>
-        <span class="storage-text"><span id="storageUsed">0 B</span> / <span id="storageTotal">1 GB</span></span>
-      </div>
-      <select id="sortSelect" class="sort-select">
-        <option value="-created_at">Newest First</option>
-        <option value="created_at">Oldest First</option>
-        <option value="originalName">Name A-Z</option>
-        <option value="-originalName">Name Z-A</option>
-        <option value="-size">Size: Largest</option>
-        <option value="size">Size: Smallest</option>
-      </select>
-      <select id="storageSelect" class="sort-select" title="Storage backend">
-        <option value="local">Local</option>
+      <select id="backendSelect" class="backend-select" title="Storage backend">
         <option value="supabase">Supabase</option>
         <option value="b2">Backblaze B2</option>
       </select>
+      <div class="storage-pill" id="storagePill">
+        <span class="label">Storage</span>
+        <div class="bar"><div class="fill" id="storageFill"></div></div>
+        <span class="value"><span id="storageUsed">0</span> / <span id="storageTotal">1 GB</span></span>
+      </div>
+      <select id="sortSelect" class="sort-select">
+        <option value="-created_at">Newest</option>
+        <option value="created_at">Oldest</option>
+        <option value="originalName">A-Z</option>
+        <option value="-originalName">Z-A</option>
+        <option value="-size">Largest</option>
+        <option value="size">Smallest</option>
+      </select>
       <button id="newFolderBtn" class="btn btn-primary btn-sm"><i class="fas fa-folder-plus"></i><span>New</span></button>
       <button id="uploadBtn" class="btn btn-secondary btn-sm"><i class="fas fa-upload"></i><span>Upload</span></button>
-      <input type="file" id="fileInput" multiple style="display: none;">
-      <button id="themeToggle" class="btn btn-secondary" aria-label="Toggle dark mode"><i class="fas fa-moon"></i></button>
+      <input type="file" id="fileInput" multiple style="display:none">
+      <button id="themeToggle" class="btn btn-secondary btn-icon" aria-label="Theme"><i class="fas fa-moon"></i></button>
       <div class="user-menu">
-        <button id="userMenuBtn" class="user-menu-btn">
-          <i class="fas fa-user-circle"></i> <i class="fas fa-chevron-down"></i>
-        </button>
+        <button id="userMenuBtn" class="user-menu-btn"><i class="fas fa-user-circle"></i> <i class="fas fa-chevron-down"></i></button>
         <div id="userDropdown" class="user-dropdown hidden">
           <button id="changeUsernameBtn" class="dropdown-item"><i class="fas fa-user-edit"></i> Change Username</button>
           <button id="changePasswordBtn" class="dropdown-item"><i class="fas fa-lock"></i> Change Password</button>
@@ -60,7 +57,7 @@
   </header>
 
   <div class="main-container">
-    <aside class="sidebar">
+    <aside class="sidebar" id="sidebar">
       <div class="sidebar-section">
         <h3 class="sidebar-title">Folders</h3>
         <ul class="folder-tree" id="folderTree">
@@ -87,30 +84,25 @@
       <div class="empty-state hidden" id="emptyState">
         <i class="fas fa-folder-open"></i>
         <h3>This folder is empty</h3>
-        <p>Drag & drop files here or click Upload</p>
+        <p>Drop files here or click Upload</p>
         <button id="emptyUploadBtn" class="btn btn-primary"><i class="fas fa-upload"></i> Upload Files</button>
       </div>
 
       <div class="pagination hidden" id="pagination">
-        <button id="prevPage" class="btn btn-secondary btn-sm"><i class="fas fa-chevron-left"></i> Previous</button>
+        <button id="prevPage" class="btn btn-secondary btn-sm"><i class="fas fa-chevron-left"></i> Prev</button>
         <span id="pageInfo">Page 1 of 1</span>
         <button id="nextPage" class="btn btn-secondary btn-sm">Next <i class="fas fa-chevron-right"></i></button>
       </div>
     </main>
   </div>
 
+  <!-- Modals -->
   <div id="folderModal" class="modal hidden">
     <div class="modal-overlay"></div>
     <div class="modal-content">
-      <div class="modal-header">
-        <h3 id="folderModalTitle">New Folder</h3>
-        <button class="modal-close">&times;</button>
-      </div>
+      <div class="modal-header"><h3 id="folderModalTitle">New Folder</h3><button class="modal-close">&times;</button></div>
       <form id="folderForm">
-        <div class="form-group">
-          <label for="folderName">Folder Name</label>
-          <input type="text" id="folderName" required maxlength="255">
-        </div>
+        <div class="form-group"><label for="folderName">Folder Name</label><input type="text" id="folderName" required maxlength="255"></div>
         <div class="modal-actions">
           <button type="button" id="cancelFolderBtn" class="btn btn-secondary">Cancel</button>
           <button type="submit" class="btn btn-primary">Create</button>
@@ -122,17 +114,10 @@
   <div id="renameModal" class="modal hidden">
     <div class="modal-overlay"></div>
     <div class="modal-content">
-      <div class="modal-header">
-        <h3>Rename</h3>
-        <button class="modal-close">&times;</button>
-      </div>
+      <div class="modal-header"><h3>Rename</h3><button class="modal-close">&times;</button></div>
       <form id="renameForm">
-        <div class="form-group">
-          <label for="renameName">New Name</label>
-          <input type="text" id="renameName" required maxlength="255">
-        </div>
-        <input type="hidden" id="renameId">
-        <input type="hidden" id="renameType" value="file">
+        <div class="form-group"><label for="renameName">New Name</label><input type="text" id="renameName" required maxlength="255"></div>
+        <input type="hidden" id="renameId"><input type="hidden" id="renameType" value="file">
         <div class="modal-actions">
           <button type="button" id="cancelRenameBtn" class="btn btn-secondary">Cancel</button>
           <button type="submit" class="btn btn-primary">Rename</button>
@@ -144,16 +129,9 @@
   <div id="usernameModal" class="modal hidden">
     <div class="modal-overlay"></div>
     <div class="modal-content">
-      <div class="modal-header">
-        <h3>Change Username</h3>
-        <button class="modal-close">&times;</button>
-      </div>
+      <div class="modal-header"><h3>Change Username</h3><button class="modal-close">&times;</button></div>
       <form id="usernameForm">
-        <div class="form-group">
-          <label for="newUsername">New Username</label>
-          <input type="text" id="newUsername" required maxlength="30" pattern="[a-zA-Z0-9_]+">
-          <small>3-30 characters, letters, numbers, underscores only</small>
-        </div>
+        <div class="form-group"><label for="newUsername">New Username</label><input type="text" id="newUsername" required maxlength="30" pattern="[a-zA-Z0-9_]+"><small>3-30 chars, letters, numbers, underscores</small></div>
         <div class="modal-actions">
           <button type="button" id="cancelUsernameBtn" class="btn btn-secondary">Cancel</button>
           <button type="submit" class="btn btn-primary">Change</button>
@@ -165,24 +143,11 @@
   <div id="passwordModal" class="modal hidden">
     <div class="modal-overlay"></div>
     <div class="modal-content">
-      <div class="modal-header">
-        <h3>Change Password</h3>
-        <button class="modal-close">&times;</button>
-      </div>
+      <div class="modal-header"><h3>Change Password</h3><button class="modal-close">&times;</button></div>
       <form id="passwordForm">
-        <div class="form-group">
-          <label for="currentPassword">Current Password</label>
-          <input type="password" id="currentPassword" required>
-        </div>
-        <div class="form-group">
-          <label for="newPassword">New Password</label>
-          <input type="password" id="newPassword" required minlength="8">
-          <small>At least 8 characters</small>
-        </div>
-        <div class="form-group">
-          <label for="confirmNewPassword">Confirm New Password</label>
-          <input type="password" id="confirmNewPassword" required>
-        </div>
+        <div class="form-group"><label for="currentPassword">Current Password</label><input type="password" id="currentPassword" required></div>
+        <div class="form-group"><label for="newPassword">New Password</label><input type="password" id="newPassword" required minlength="8"><small>At least 8 characters</small></div>
+        <div class="form-group"><label for="confirmNewPassword">Confirm</label><input type="password" id="confirmNewPassword" required></div>
         <div class="modal-actions">
           <button type="button" id="cancelPasswordBtn" class="btn btn-secondary">Cancel</button>
           <button type="submit" class="btn btn-primary">Change</button>

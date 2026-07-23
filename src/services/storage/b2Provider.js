@@ -1,48 +1,52 @@
-const fs = require('fs').promises;
 const B2 = require('backblaze-b2');
 
-const b2 = new B2({
-  applicationKeyId: process.env.B2_KEY_ID,
-  applicationKey: process.env.B2_APP_KEY
-});
-
-let authorized = false;
-
-async function ensureAuth() {
-  if (!authorized) {
-    await b2.authorize();
-    authorized = true;
+function createClient() {
+  const keyId = process.env.B2_KEY_ID;
+  const appKey = process.env.B2_APP_KEY;
+  if (!keyId || !appKey) {
+    throw new Error('Backblaze B2 not configured. Set B2_KEY_ID and B2_APP_KEY in .env');
   }
+  return new B2({ applicationKeyId: keyId, applicationKey: appKey });
 }
 
 const b2Provider = {
   name: 'b2',
 
   async upload(file, userId) {
-    await ensureAuth();
+    const b2 = createClient();
+    await b2.authorize();
+
     const bucketId = process.env.B2_BUCKET_ID;
-    const fileName = `${userId}/${file.filename}`;
-    const fileBuffer = await fs.readFile(file.path);
-    const { data } = await b2.uploadFile({
+    if (!bucketId) throw new Error('B2_BUCKET_ID not set in .env');
+
+    const fileName = `${userId}/${Date.now()}-${file.originalname}`;
+
+    const response = await b2.uploadFile({
       bucketId,
       fileName,
-      data: fileBuffer,
+      data: file.buffer,
       contentType: file.mimetype
     });
-    await fs.unlink(file.path).catch(() => {});
-    return { path: data.fileId, b2FileName: fileName };
+
+    if (!response?.data?.fileId) {
+      throw new Error('B2 upload failed: no fileId returned');
+    }
+
+    return { path: response.data.fileId, b2FileName: fileName };
   },
 
   async download(fileRecord) {
-    await ensureAuth();
-    const { data } = await b2.downloadFileById({
-      fileId: fileRecord.path
-    });
-    return { buffer: data, fileName: fileRecord.original_name };
+    const b2 = createClient();
+    await b2.authorize();
+
+    const response = await b2.downloadFileById({ fileId: fileRecord.path });
+    return { buffer: response.data, fileName: fileRecord.original_name };
   },
 
   async delete(fileRecord) {
-    await ensureAuth();
+    const b2 = createClient();
+    await b2.authorize();
+
     const { data: fileInfo } = await b2.getFileInfo({ fileId: fileRecord.path });
     await b2.deleteFileVersion({
       fileId: fileRecord.path,

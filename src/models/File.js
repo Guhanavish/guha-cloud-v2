@@ -90,6 +90,16 @@ const File = {
     };
   },
 
+  async getTotalSizeByBackend(ownerId, backend) {
+    const { data, error } = await supabase
+      .from('guha_cloud_files')
+      .select('size')
+      .eq('owner_id', ownerId)
+      .eq('storage_backend', backend);
+    if (error) throw error;
+    return (data || []).reduce((sum, f) => sum + f.size, 0);
+  },
+
   async searchFiles(ownerId, searchTerm, options = {}) {
     let q = supabase.from('guha_cloud_files').select('*', { count: 'exact' }).eq('owner_id', ownerId);
     q = q.ilike('original_name', `%${searchTerm}%`);
