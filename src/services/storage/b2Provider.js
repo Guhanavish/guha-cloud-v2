@@ -15,12 +15,17 @@ const b2Provider = {
   async upload(file, userId) {
     const b2 = createClient();
 
-    console.log('B2: authorizing...');
+    console.log('B2: authorizing with keyId:', process.env.B2_KEY_ID?.substring(0, 10) + '...');
     try {
       await b2.authorize();
     } catch (e) {
-      console.error('B2 authorize failed:', e.response?.status, e.response?.data || e.message);
-      throw new Error(`B2 auth failed: ${e.response?.status || ''} ${e.response?.data?.message || e.message}`);
+      console.error('B2 authorize FULL error:', {
+        status: e.response?.status,
+        statusText: e.response?.statusText,
+        data: JSON.stringify(e.response?.data),
+        message: e.message
+      });
+      throw new Error(`B2 auth failed: ${JSON.stringify(e.response?.data)}`);
     }
     console.log('B2: authorized successfully');
 
