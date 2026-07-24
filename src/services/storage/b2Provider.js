@@ -22,16 +22,22 @@ const b2Provider = {
     const safeName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
     const fileName = `${userId}/${Date.now()}-${safeName}`;
 
+    const { data: uploadData } = await b2.getUploadUrl(bucketId);
+    if (!uploadData?.uploadUrl) {
+      throw new Error('B2: failed to get upload URL');
+    }
+
     const response = await b2.uploadFile({
-      bucketId,
+      uploadUrl: uploadData.uploadUrl,
+      uploadAuthToken: uploadData.authorizationToken,
       fileName,
       data: file.buffer,
-      contentType: file.mimetype
+      mime: file.mimetype
     });
 
     const body = response?.data;
     if (!body?.fileId) {
-      console.error('B2 upload response:', JSON.stringify(body));
+      console.error('B2 upload response body:', JSON.stringify(body));
       throw new Error('B2 upload failed: no fileId returned');
     }
 
@@ -50,9 +56,10 @@ const b2Provider = {
     const b2 = createClient();
     await b2.authorize();
 
-    const { data: fileInfo } = await b2.getFileInfo({ fileId: fileRecord.path });
-    if (!fileInfo) {
-      console.error('B2 getFileInfo returned no data for fileId:', fileRecord.path);
+    const res = await b2.getFileInfo({ fileId: fileRecord.path });
+    const fileInfo = res?.data;
+    if (!fileInfo?.fileName) {
+      console.error('B2 getFileInfo returned no fileName for fileId:', fileRecord.path);
       return;
     }
     await b2.deleteFileVersion({
