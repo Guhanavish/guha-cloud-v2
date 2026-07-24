@@ -17,6 +17,7 @@ const { authenticate } = require('./middleware/auth');
 const supabase = require('./lib/supabase');
 
 const app = express();
+app.set('trust proxy', 1);
 const PORT = process.env.PORT || 3000;
 const MAX_FILE_SIZE = parseInt(process.env.MAX_FILE_SIZE) || 2 * 1024 * 1024 * 1024;
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';

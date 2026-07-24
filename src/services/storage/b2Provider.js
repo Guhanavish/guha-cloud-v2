@@ -14,7 +14,15 @@ const b2Provider = {
 
   async upload(file, userId) {
     const b2 = createClient();
-    await b2.authorize();
+
+    console.log('B2: authorizing...');
+    try {
+      await b2.authorize();
+    } catch (e) {
+      console.error('B2 authorize failed:', e.response?.status, e.response?.data || e.message);
+      throw new Error(`B2 auth failed: ${e.response?.status || ''} ${e.response?.data?.message || e.message}`);
+    }
+    console.log('B2: authorized successfully');
 
     const bucketId = process.env.B2_BUCKET_ID;
     if (!bucketId) throw new Error('B2_BUCKET_ID not set in .env');
@@ -22,18 +30,35 @@ const b2Provider = {
     const safeName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
     const fileName = `${userId}/${Date.now()}-${safeName}`;
 
-    const { data: uploadData } = await b2.getUploadUrl(bucketId);
+    console.log('B2: getting upload URL...');
+    let uploadData;
+    try {
+      const res = await b2.getUploadUrl(bucketId);
+      uploadData = res?.data;
+    } catch (e) {
+      console.error('B2 getUploadUrl failed:', e.response?.status, e.response?.data || e.message);
+      throw new Error(`B2 getUploadUrl failed: ${e.response?.status || ''} ${e.response?.data?.message || e.message}`);
+    }
     if (!uploadData?.uploadUrl) {
       throw new Error('B2: failed to get upload URL');
     }
+    console.log('B2: got upload URL');
 
-    const response = await b2.uploadFile({
-      uploadUrl: uploadData.uploadUrl,
-      uploadAuthToken: uploadData.authorizationToken,
-      fileName,
-      data: file.buffer,
-      mime: file.mimetype
-    });
+    console.log('B2: uploading file...');
+    let response;
+    try {
+      response = await b2.uploadFile({
+        uploadUrl: uploadData.uploadUrl,
+        uploadAuthToken: uploadData.authorizationToken,
+        fileName,
+        data: file.buffer,
+        mime: file.mimetype
+      });
+    } catch (e) {
+      console.error('B2 uploadFile failed:', e.response?.status, e.response?.data || e.message);
+      throw new Error(`B2 uploadFile failed: ${e.response?.status || ''} ${e.response?.data?.message || e.message}`);
+    }
+    console.log('B2: upload completed');
 
     const body = response?.data;
     if (!body?.fileId) {
