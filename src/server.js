@@ -86,6 +86,22 @@ const publicPath = path.join(__dirname, '..', 'public');
 app.use(express.static(publicPath));
 app.use('/uploads', express.static(path.join(__dirname, '..', 'public', 'uploads')));
 
+// B2 diagnostic endpoint
+app.get('/api/test-b2', async (req, res) => {
+  try {
+    const B2 = require('backblaze-b2');
+    const keyId = process.env.B2_KEY_ID;
+    const appKey = process.env.B2_APP_KEY;
+    const b2 = new B2({ applicationKeyId: keyId, applicationKey: appKey });
+    await b2.authorize();
+    const bucketId = process.env.B2_BUCKET_ID;
+    const { data: uploadData } = await b2.getUploadUrl(bucketId);
+    res.json({ success: true, apiUrl: b2.apiUrl, hasUploadUrl: !!uploadData?.uploadUrl });
+  } catch (e) {
+    res.status(500).json({ error: e.message, status: e.response?.status, data: e.response?.data });
+  }
+});
+
 app.get('/api/config', (req, res) => {
   res.json({
     defaultStorageBackend: process.env.DEFAULT_STORAGE_BACKEND || 'supabase',

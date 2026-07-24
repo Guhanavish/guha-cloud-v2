@@ -15,7 +15,13 @@ const b2Provider = {
   async upload(file, userId) {
     const b2 = createClient();
 
-    console.log('B2: authorizing with keyId:', process.env.B2_KEY_ID?.substring(0, 10) + '...');
+    console.log('B2: authorizing...');
+    // Debug: print the actual auth header being generated
+    const testId = process.env.B2_KEY_ID;
+    const testKey = process.env.B2_APP_KEY;
+    const rawAuth = testId + ':' + testKey;
+    console.log('B2 keyId length:', testId?.length, 'appKey length:', testKey?.length);
+    console.log('B2 base64 auth:', Buffer.from(rawAuth).toString('base64'));
     try {
       await b2.authorize();
     } catch (e) {
@@ -23,7 +29,8 @@ const b2Provider = {
         status: e.response?.status,
         statusText: e.response?.statusText,
         data: JSON.stringify(e.response?.data),
-        message: e.message
+        message: e.message,
+        configUrl: e.response?.config?.url?.substring(0, 50)
       });
       throw new Error(`B2 auth failed: ${JSON.stringify(e.response?.data)}`);
     }
