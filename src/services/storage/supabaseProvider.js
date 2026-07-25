@@ -53,7 +53,12 @@ const supabaseProvider = {
   async delete(fileRecord) {
     const { error } = await supabase.storage.from(BUCKET_NAME).remove([fileRecord.path]);
     if (error) console.error('Supabase Storage delete error:', error);
-  }
+  },
+
+  async startLargeFile() { throw new Error('Large file upload not supported for Supabase'); },
+  async getUploadPartUrl() { throw new Error('Large file upload not supported for Supabase'); },
+  async uploadPart() { throw new Error('Large file upload not supported for Supabase'); },
+  async finishLargeFile() { throw new Error('Large file upload not supported for Supabase'); }
 };
 
 module.exports = supabaseProvider;

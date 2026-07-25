@@ -72,6 +72,39 @@ const b2Provider = {
     return { buffer: response.data, fileName: fileRecord.original_name };
   },
 
+  async startLargeFile(fileName, mimeType) {
+    const b2 = createClient();
+    await b2.authorize();
+    const bucketId = process.env.B2_BUCKET_ID;
+    const res = await b2.startLargeFile({ bucketId, fileName, contentType: mimeType });
+    return { fileId: res.data.fileId };
+  },
+
+  async getUploadPartUrl(fileId) {
+    const b2 = createClient();
+    await b2.authorize();
+    const res = await b2.getUploadPartUrl({ fileId });
+    return { uploadUrl: res.data.uploadUrl, authToken: res.data.authorizationToken };
+  },
+
+  async uploadPart(uploadUrl, authToken, partNumber, dataBuffer) {
+    const b2 = createClient();
+    // uploadPart creates its own client/authorization
+    const res = await b2.uploadPart({
+      uploadUrl,
+      uploadAuthToken: authToken,
+      partNumber,
+      data: dataBuffer
+    });
+    return { sha1: res.data.contentSha1 };
+  },
+
+  async finishLargeFile(fileId, partSha1Array) {
+    const b2 = createClient();
+    await b2.authorize();
+    await b2.finishLargeFile({ fileId, partSha1Array });
+  },
+
   async delete(fileRecord) {
     const b2 = createClient();
     await b2.authorize();

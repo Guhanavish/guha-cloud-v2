@@ -14,6 +14,7 @@ const fileRoutes = require('./routes/files');
 const folderRoutes = require('./routes/folders');
 const { errorHandler } = require('./middleware/errorHandler');
 const { authenticate } = require('./middleware/auth');
+const chunkController = require('./controllers/chunkController');
 const supabase = require('./lib/supabase');
 
 const app = express();
@@ -96,6 +97,11 @@ app.get('/api/config', (req, res) => {
 app.use('/api/auth', authRoutes);
 app.use('/api/files', authenticate, fileRoutes);
 app.use('/api/folders', authenticate, folderRoutes);
+
+// Chunked upload routes (authenticated, raw body)
+app.post('/api/chunk/init', authenticate, express.json(), chunkController.initUpload);
+app.post('/api/chunk/upload/:uploadId/:chunkIndex', authenticate, express.raw({ type: '*/*', limit: '15mb' }), chunkController.uploadChunk);
+app.post('/api/chunk/finalize/:uploadId', authenticate, chunkController.finalizeUpload);
 
 // HTML routes
 app.get('/', (req, res) => {

@@ -261,50 +261,117 @@ function renderPagination(pag) {
 }
 
 async function uploadFiles(files) {
+  const container = document.getElementById('uploadProgress') || createUploadContainer();
+
+  for (const file of files) {
+    const isB2 = backendSelect.value === 'b2';
+    if (isB2 && file.size > 50 * 1024 * 1024) {
+      await uploadChunked(file, container);
+    } else {
+      await uploadSingle(file, container);
+    }
+  }
+}
+
+async function uploadSingle(file, container) {
   const formData = new FormData();
-  files.forEach(f => formData.append('files', f));
+  formData.append('files', file);
   if (currentFolder !== 'root') formData.append('folderId', currentFolder);
   formData.append('storageBackend', backendSelect.value);
 
-  const container = document.getElementById('uploadProgress') || createUploadContainer();
-  const items = [];
-
-  for (const file of files) {
-    const item = createUploadItem(file.name);
-    container.appendChild(item);
-    items.push({ file, item, progress: item.querySelector('.upload-fill'), status: item.querySelector('.upload-status') });
-  }
+  const item = createUploadItem(file.name);
+  container.appendChild(item);
+  const prog = item.querySelector('.upload-fill');
+  const st = item.querySelector('.upload-status');
 
   try {
     const xhr = new XMLHttpRequest();
     xhr.open('POST', `${API}/files/upload`);
     xhr.withCredentials = true;
 
-    let uploaded = 0;
     xhr.upload.onprogress = (e) => {
-      if (e.lengthComputable) {
-        const pct = (e.loaded / e.total) * 100;
-        items.forEach(i => i.progress.style.width = `${pct}%`);
-      }
+      if (e.lengthComputable) prog.style.width = `${(e.loaded / e.total) * 100}%`;
     };
 
-    xhr.onload = async () => {
+    xhr.onload = () => {
       if (xhr.status >= 200 && xhr.status < 300) {
-        items.forEach(i => { i.progress.style.width = '100%'; i.status.textContent = 'Complete'; i.item.classList.add('complete'); });
-        setTimeout(() => { items.forEach(i => i.item.remove()); if (!container.children.length) container.remove(); }, 2000);
+        prog.style.width = '100%'; st.textContent = 'Complete'; item.classList.add('complete');
+        setTimeout(() => { item.remove(); if (!container.children.length) container.remove(); }, 2000);
         loadFiles(); loadUser();
       } else {
         let msg = 'Failed';
         try { const err = JSON.parse(xhr.responseText); msg = err.error || msg; } catch {}
-        items.forEach(i => { i.status.textContent = msg; i.item.classList.add('error'); });
-        setTimeout(() => { items.forEach(i => i.item.remove()); if (!container.children.length) container.remove(); }, 5000);
+        st.textContent = msg; item.classList.add('error');
+        setTimeout(() => { item.remove(); if (!container.children.length) container.remove(); }, 5000);
       }
     };
-
-    xhr.onerror = () => { items.forEach(i => { i.status.textContent = 'Error'; i.item.classList.add('error'); }); };
+    xhr.onerror = () => { st.textContent = 'Error'; item.classList.add('error'); };
     xhr.send(formData);
   } catch (e) {
-    items.forEach(i => { i.status.textContent = 'Error'; i.item.classList.add('error'); });
+    st.textContent = 'Error'; item.classList.add('error');
+  }
+}
+
+async function uploadChunked(file, container) {
+  const CHUNK_SIZE = 10 * 1024 * 1024; // 10MB
+  const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+
+  const item = createUploadItem(file.name);
+  container.appendChild(item);
+  const prog = item.querySelector('.upload-fill');
+  const st = item.querySelector('.upload-status');
+
+  try {
+    st.textContent = 'Initializing...';
+    const initRes = await fetch(`${API}/chunk/init`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({
+        fileName: file.name,
+        mimeType: file.type || 'application/octet-stream',
+        size: file.size,
+        totalChunks,
+        folderId: currentFolder === 'root' ? null : currentFolder,
+        storageBackend: 'b2'
+      })
+    });
+    const initData = await initRes.json();
+    if (!initRes.ok) throw new Error(initData.error || 'Init failed');
+    const { uploadId } = initData;
+
+    for (let i = 0; i < totalChunks; i++) {
+      const start = i * CHUNK_SIZE;
+      const end = Math.min(start + CHUNK_SIZE, file.size);
+      const chunk = file.slice(start, end);
+
+      st.textContent = `Uploading chunk ${i + 1}/${totalChunks}`;
+      const chunkRes = await fetch(`${API}/chunk/upload/${uploadId}/${i}`, {
+        method: 'POST',
+        credentials: 'include',
+        body: chunk
+      });
+      if (!chunkRes.ok) {
+        const errData = await chunkRes.json().catch(() => ({}));
+        throw new Error(errData.error || `Chunk ${i + 1} failed`);
+      }
+      prog.style.width = `${((i + 1) / totalChunks) * 90}%`;
+    }
+
+    st.textContent = 'Finalizing...';
+    const finRes = await fetch(`${API}/chunk/finalize/${uploadId}`, {
+      method: 'POST',
+      credentials: 'include'
+    });
+    const finData = await finRes.json();
+    if (!finRes.ok) throw new Error(finData.error || 'Finalize failed');
+
+    prog.style.width = '100%'; st.textContent = 'Complete'; item.classList.add('complete');
+    setTimeout(() => { item.remove(); if (!container.children.length) container.remove(); }, 2000);
+    loadFiles(); loadUser();
+  } catch (e) {
+    st.textContent = e.message; item.classList.add('error');
+    setTimeout(() => { item.remove(); if (!container.children.length) container.remove(); }, 8000);
   }
 }
 

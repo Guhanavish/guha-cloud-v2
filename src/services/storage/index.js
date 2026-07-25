@@ -33,4 +33,20 @@ function getBackendLimit(backend) {
   return BACKEND_LIMITS[backend] || BACKEND_LIMITS.supabase;
 }
 
-module.exports = { upload, download, deleteFile, getBackendLimit, BACKEND_LIMITS };
+async function startLargeFile(backend, fileName, mimeType) {
+  return getProvider(backend).startLargeFile(fileName, mimeType);
+}
+
+async function getUploadPartUrl(backend, fileId) {
+  return getProvider(backend).getUploadPartUrl(fileId);
+}
+
+async function uploadPart(backend, uploadUrl, authToken, partNumber, data) {
+  return getProvider(backend).uploadPart(uploadUrl, authToken, partNumber, data);
+}
+
+async function finishLargeFile(backend, fileId, partSha1Array) {
+  return getProvider(backend).finishLargeFile(fileId, partSha1Array);
+}
+
+module.exports = { upload, download, deleteFile, getBackendLimit, BACKEND_LIMITS, startLargeFile, getUploadPartUrl, uploadPart, finishLargeFile };
