@@ -263,6 +263,11 @@ body {
 .storage-badge { font-size: 9px; padding: 1px 6px; border-radius: 8px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; }
 .storage-badge.supabase { background: rgba(99,102,241,0.12); color: var(--primary); }
 .storage-badge.b2 { background: rgba(234,179,8,0.12); color: var(--warning); }
+.status-badge { font-size: 9px; padding: 1px 6px; border-radius: 8px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; margin-right: 4px; }
+.status-badge.processing { background: rgba(99,102,241,0.15); color: var(--primary); animation: pulse 1.5s ease-in-out infinite; }
+.status-badge.failed { background: rgba(239,68,68,0.15); color: var(--danger); }
+@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+.file-item.disabled { opacity: 0.5; pointer-events: none; }
 .file-checkbox { position: absolute; top: 6px; left: 6px; width: 16px; height: 16px; cursor: pointer; accent-color: var(--primary); }
 
 .empty-state {

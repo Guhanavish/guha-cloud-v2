@@ -179,14 +179,17 @@ function renderFiles(files) {
     return;
   }
   emptyState.classList.add('hidden');
-  fileGrid.innerHTML = files.map(f => `
-    <div class="file-item${selectedItems.has(f.id) ? ' selected' : ''}" data-id="${f.id}" data-type="file">
+  fileGrid.innerHTML = files.map(f => {
+    const statusBadge = f.path === null ? '<span class="status-badge processing">Processing</span>' :
+      f.path === 'failed' ? '<span class="status-badge failed">Failed</span>' : '';
+    return `
+    <div class="file-item${selectedItems.has(f.id) ? ' selected' : ''}${f.path === null || f.path === 'failed' ? ' disabled' : ''}" data-id="${f.id}" data-type="file">
       <input type="checkbox" class="file-checkbox" ${selectedItems.has(f.id) ? 'checked' : ''}>
       <i class="file-icon fas ${getFileIcon(f.mime_type)}"></i>
       <div class="file-name" title="${escapeHtml(f.original_name)}">${escapeHtml(f.original_name)}</div>
-      <div class="file-meta">${formatBytes(f.size)} <span class="storage-badge ${f.storage_backend || 'supabase'}">${(f.storage_backend || 'supabase') === 'supabase' ? 'Supabase' : 'B2'}</span></div>
-    </div>
-  `).join('');
+      <div class="file-meta">${formatBytes(f.size)} ${statusBadge} <span class="storage-badge ${f.storage_backend || 'supabase'}">${(f.storage_backend || 'supabase') === 'supabase' ? 'Supabase' : 'B2'}</span></div>
+    </div>`;
+  }).join('');
 
   fileGrid.querySelectorAll('.file-item').forEach(item => {
     item.addEventListener('click', (e) => {

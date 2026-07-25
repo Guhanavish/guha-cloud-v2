@@ -23,19 +23,37 @@ exports.uploadFiles = async (req, res, next) => {
         return next(new AppError(`Not enough storage on ${storageBackend} for ${file.originalname}`, 400));
       }
 
-      const result = await storage.upload(file, req.user.id, storageBackend);
-
       const fileDoc = await File.create({
         originalName: file.originalname,
         storedName: file.originalname,
         mimeType: file.mimetype,
         size: file.size,
-        path: result.path,
+        path: storageBackend === 'b2' ? null : 'pending',
         ownerId: req.user.id,
         folderId: folderId || null,
         storageBackend,
-        b2FileName: result.b2FileName || null
+        b2FileName: null
       });
+
+      if (storageBackend === 'b2') {
+        const buf = file.buffer;
+        const fId = fileDoc.id;
+        setImmediate(async () => {
+          try {
+            const result = await storage.upload({ ...file, buffer: buf }, req.user.id, storageBackend);
+            await File.update(fId, { path: result.path, b2_file_name: result.b2FileName || null });
+            console.log('B2 background upload complete for file', fId);
+          } catch (err) {
+            console.error('B2 background upload failed:', err.message);
+            await File.update(fId, { path: 'failed' });
+          }
+        });
+        fileDoc.path = null;
+      } else {
+        const result = await storage.upload(file, req.user.id, storageBackend);
+        await File.update(fileDoc.id, { path: result.path });
+        fileDoc.path = result.path;
+      }
 
       uploadedFiles.push(fileDoc);
     }
@@ -92,6 +110,11 @@ exports.downloadFile = async (req, res, next) => {
     const fileRecord = await File.findById(req.params.id);
     if (!fileRecord || fileRecord.owner_id !== req.user.id) {
       return next(new AppError('File not found', 404));
+    }
+
+    if (!fileRecord.path || fileRecord.path === 'failed') {
+      const state = !fileRecord.path ? 'still processing' : 'upload failed';
+      return next(new AppError(`This file is ${state}. Please try again later.`, 400));
     }
 
     await File.incrementDownload(fileRecord.id);
