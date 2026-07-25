@@ -4,12 +4,9 @@ const { v4: uuidv4 } = require('uuid');
 let _hasDeletedAt = null;
 async function _checkDeletedAt() {
   if (_hasDeletedAt !== null) return _hasDeletedAt;
-  try {
-    await supabase.from('guha_cloud_files').select('deleted_at').limit(1);
-    _hasDeletedAt = true;
-  } catch {
-    _hasDeletedAt = false;
-  }
+  const { error } = await supabase.from('guha_cloud_files').select('deleted_at').limit(1);
+  _hasDeletedAt = !error;
+  if (error) console.warn('deleted_at column not available:', error.message);
   return _hasDeletedAt;
 }
 

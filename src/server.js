@@ -137,24 +137,20 @@ app.use(errorHandler);
 
 // Add deleted_at column if it doesn't exist
 async function ensureRecycleBinColumn() {
+  const { error } = await supabase.from('guha_cloud_files').select('deleted_at').limit(1);
+  if (!error) { console.log('deleted_at column exists'); return; }
+  // Column doesn't exist — try adding via raw SQL
   try {
-    const { data } = await supabase.from('guha_cloud_files').select('deleted_at').limit(1).maybeSingle();
-    // If no error, column exists
-    console.log('deleted_at column exists');
-  } catch {
-    // Column doesn't exist — add it via raw SQL through pg pool
-    try {
-      const pg = require('pg');
-      const pool = new pg.Pool({
-        connectionString: process.env.SUPABASE_DB_URL || process.env.DATABASE_URL,
-        ssl: IS_PRODUCTION ? { rejectUnauthorized: false } : false
-      });
-      await pool.query('ALTER TABLE guha_cloud_files ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ');
-      await pool.end();
-      console.log('Added deleted_at column');
-    } catch (alterErr) {
-      console.error('Could not add deleted_at column. Recycle bin will be unavailable:', alterErr.message);
-    }
+    const pg = require('pg');
+    const pool = new pg.Pool({
+      connectionString: process.env.SUPABASE_DB_URL || process.env.DATABASE_URL,
+      ssl: IS_PRODUCTION ? { rejectUnauthorized: false } : false
+    });
+    await pool.query('ALTER TABLE guha_cloud_files ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ');
+    await pool.end();
+    console.log('Added deleted_at column');
+  } catch (alterErr) {
+    console.error('Could not add deleted_at column:', alterErr.message);
   }
 }
 
