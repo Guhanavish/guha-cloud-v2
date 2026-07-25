@@ -6,7 +6,11 @@ function createClient() {
   if (!keyId || !appKey) {
     throw new Error('Backblaze B2 not configured. Set B2_KEY_ID and B2_APP_KEY in .env');
   }
-  return new B2({ applicationKeyId: keyId, applicationKey: appKey });
+  return new B2({
+    applicationKeyId: keyId,
+    applicationKey: appKey,
+    axios: { timeout: 300000 }
+  });
 }
 
 const b2Provider = {
@@ -15,26 +19,11 @@ const b2Provider = {
   async upload(file, userId) {
     const b2 = createClient();
 
-    console.log('B2: authorizing...');
-    // Debug: print the actual auth header being generated
-    const testId = process.env.B2_KEY_ID;
-    const testKey = process.env.B2_APP_KEY;
-    const rawAuth = testId + ':' + testKey;
-    console.log('B2 keyId length:', testId?.length, 'appKey length:', testKey?.length);
-    console.log('B2 base64 auth:', Buffer.from(rawAuth).toString('base64'));
     try {
       await b2.authorize();
     } catch (e) {
-      console.error('B2 authorize FULL error:', {
-        status: e.response?.status,
-        statusText: e.response?.statusText,
-        data: JSON.stringify(e.response?.data),
-        message: e.message,
-        configUrl: e.response?.config?.url?.substring(0, 50)
-      });
-      throw new Error(`B2 auth failed: ${JSON.stringify(e.response?.data)}`);
+      throw new Error(`B2 auth failed: ${e.response?.data?.code || e.message}`);
     }
-    console.log('B2: authorized successfully');
 
     const bucketId = process.env.B2_BUCKET_ID;
     if (!bucketId) throw new Error('B2_BUCKET_ID not set in .env');
@@ -42,21 +31,17 @@ const b2Provider = {
     const safeName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, '_');
     const fileName = `${userId}/${Date.now()}-${safeName}`;
 
-    console.log('B2: getting upload URL...');
     let uploadData;
     try {
       const res = await b2.getUploadUrl(bucketId);
       uploadData = res?.data;
     } catch (e) {
-      console.error('B2 getUploadUrl failed:', e.response?.status, e.response?.data || e.message);
-      throw new Error(`B2 getUploadUrl failed: ${e.response?.status || ''} ${e.response?.data?.message || e.message}`);
+      throw new Error(`B2 upload URL failed: ${e.response?.data?.code || e.message}`);
     }
     if (!uploadData?.uploadUrl) {
       throw new Error('B2: failed to get upload URL');
     }
-    console.log('B2: got upload URL');
 
-    console.log('B2: uploading file...');
     let response;
     try {
       response = await b2.uploadFile({
@@ -67,10 +52,8 @@ const b2Provider = {
         mime: file.mimetype
       });
     } catch (e) {
-      console.error('B2 uploadFile failed:', e.response?.status, e.response?.data || e.message);
-      throw new Error(`B2 uploadFile failed: ${e.response?.status || ''} ${e.response?.data?.message || e.message}`);
+      throw new Error(`B2 file upload failed: ${e.response?.data?.code || e.message}`);
     }
-    console.log('B2: upload completed');
 
     const body = response?.data;
     if (!body?.fileId) {

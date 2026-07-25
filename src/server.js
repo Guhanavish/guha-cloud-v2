@@ -86,22 +86,6 @@ const publicPath = path.join(__dirname, '..', 'public');
 app.use(express.static(publicPath));
 app.use('/uploads', express.static(path.join(__dirname, '..', 'public', 'uploads')));
 
-// B2 diagnostic endpoint
-app.get('/api/test-b2', async (req, res) => {
-  try {
-    const B2 = require('backblaze-b2');
-    const keyId = process.env.B2_KEY_ID;
-    const appKey = process.env.B2_APP_KEY;
-    const b2 = new B2({ applicationKeyId: keyId, applicationKey: appKey });
-    await b2.authorize();
-    const bucketId = process.env.B2_BUCKET_ID;
-    const { data: uploadData } = await b2.getUploadUrl(bucketId);
-    res.json({ success: true, apiUrl: b2.apiUrl, hasUploadUrl: !!uploadData?.uploadUrl });
-  } catch (e) {
-    res.status(500).json({ error: e.message, status: e.response?.status, data: e.response?.data });
-  }
-});
-
 app.get('/api/config', (req, res) => {
   res.json({
     defaultStorageBackend: process.env.DEFAULT_STORAGE_BACKEND || 'supabase',
@@ -147,9 +131,10 @@ async function startServer() {
     if (error) throw error;
     console.log('Connected to Supabase');
     
-    app.listen(PORT, '0.0.0.0', () => {
+    const server = app.listen(PORT, '0.0.0.0', () => {
       console.log(`Server running on port ${PORT}`);
     });
+    server.timeout = 300000; // 5 minutes for large file uploads
   } catch (err) {
     console.error('Supabase connection error:', err);
     process.exit(1);
