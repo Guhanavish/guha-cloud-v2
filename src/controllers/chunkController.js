@@ -63,10 +63,10 @@ exports.uploadChunk = async (req, res, next) => {
       return res.status(404).json({ error: 'Upload session not found' });
     }
 
-    const chunkBuffer = req.body;
-    if (!chunkBuffer || chunkBuffer.length === 0) {
+    if (!req.file || !req.file.buffer || req.file.buffer.length === 0) {
       return res.status(400).json({ error: 'Empty chunk' });
     }
+    const chunkBuffer = req.file.buffer;
 
     const metaPath = path.join(dir, 'meta.json');
     const meta = JSON.parse(fs.readFileSync(metaPath, 'utf8'));

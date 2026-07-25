@@ -346,10 +346,12 @@ async function uploadChunked(file, container) {
       const chunk = file.slice(start, end);
 
       st.textContent = `Uploading chunk ${i + 1}/${totalChunks}`;
+      const fd = new FormData();
+      fd.append('chunk', chunk);
       const chunkRes = await fetch(`${API}/chunk/upload/${uploadId}/${i}`, {
         method: 'POST',
         credentials: 'include',
-        body: chunk
+        body: fd
       });
       if (!chunkRes.ok) {
         const errData = await chunkRes.json().catch(() => ({}));

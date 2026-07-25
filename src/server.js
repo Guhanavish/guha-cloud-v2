@@ -98,9 +98,14 @@ app.use('/api/auth', authRoutes);
 app.use('/api/files', authenticate, fileRoutes);
 app.use('/api/folders', authenticate, folderRoutes);
 
-// Chunked upload routes (authenticated, raw body)
+// Chunked upload routes (authenticated)
 app.post('/api/chunk/init', authenticate, express.json(), chunkController.initUpload);
-app.post('/api/chunk/upload/:uploadId/:chunkIndex', authenticate, express.raw({ type: '*/*', limit: '15mb' }), chunkController.uploadChunk);
+
+const multer = require('multer');
+const chunkUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 15 * 1024 * 1024 } }).single('chunk');
+const handleChunk = (req, res, next) => { chunkUpload(req, res, (err) => { if (err) return res.status(400).json({ error: 'Chunk upload error: ' + err.message }); next(); }); };
+
+app.post('/api/chunk/upload/:uploadId/:chunkIndex', authenticate, handleChunk, chunkController.uploadChunk);
 app.post('/api/chunk/finalize/:uploadId', authenticate, chunkController.finalizeUpload);
 
 // HTML routes
