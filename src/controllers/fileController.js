@@ -28,31 +28,20 @@ exports.uploadFiles = async (req, res, next) => {
         storedName: file.originalname,
         mimeType: file.mimetype,
         size: file.size,
-        path: storageBackend === 'b2' ? null : 'pending',
+        path: 'pending',
         ownerId: req.user.id,
         folderId: folderId || null,
         storageBackend,
         b2FileName: null
       });
 
-      if (storageBackend === 'b2') {
-        const buf = file.buffer;
-        const fId = fileDoc.id;
-        setImmediate(async () => {
-          try {
-            const result = await storage.upload({ ...file, buffer: buf }, req.user.id, storageBackend);
-            await File.update(fId, { path: result.path, b2_file_name: result.b2FileName || null });
-            console.log('B2 background upload complete for file', fId);
-          } catch (err) {
-            console.error('B2 background upload failed:', err.message);
-            await File.update(fId, { path: 'failed' });
-          }
-        });
-        fileDoc.path = null;
-      } else {
+      try {
         const result = await storage.upload(file, req.user.id, storageBackend);
-        await File.update(fileDoc.id, { path: result.path });
+        await File.update(fileDoc.id, { path: result.path, b2_file_name: result.b2FileName || null });
         fileDoc.path = result.path;
+      } catch (uploadError) {
+        await File.hardDelete(fileDoc.id).catch(() => {});
+        throw uploadError;
       }
 
       uploadedFiles.push(fileDoc);
