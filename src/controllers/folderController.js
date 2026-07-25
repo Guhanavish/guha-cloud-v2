@@ -78,12 +78,10 @@ exports.deleteFolder = async (req, res, next) => {
       return res.json({ message: 'Folder deleted, files moved to root' });
     }
 
-    // Soft-delete all files inside (move to recycle bin)
-    const { data: files } = await sup.from('guha_cloud_files').select('id').eq('folder_id', req.params.id);
+    // Soft-delete all files inside (falls back to hard delete if recycle bin column missing)
+    const { data: files } = await sup.from('guha_cloud_files').select('id,size').eq('folder_id', req.params.id);
+    const deletedSize = (files || []).reduce((s, f) => s + f.size, 0);
     await Promise.all((files || []).map(f => File.softDelete(f.id)));
-    // Calculate deleted size for storage_used update
-    const { data: sizeData } = await sup.from('guha_cloud_files').select('size').eq('folder_id', req.params.id).is('deleted_at', null);
-    const deletedSize = (sizeData || []).reduce((s, f) => s + f.size, 0);
     await Folder.delete(req.params.id);
     if (deletedSize > 0) {
       const user = await User.findById(req.user.id);

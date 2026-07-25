@@ -82,9 +82,41 @@ const File = {
     return data;
   },
 
-  async delete(id) {
+  async hardDelete(id) {
     const { error } = await supabase.from('guha_cloud_files').delete().eq('id', id);
     if (error) throw error;
+  },
+
+  async softDelete(id) {
+    if (!(await _checkDeletedAt())) {
+      // Column doesn't exist — fall back to hard delete
+      const { data: file } = await supabase.from('guha_cloud_files').select('*').eq('id', id).single();
+      if (file) {
+        const storage = require('../services/storage');
+        await storage.deleteFile(file).catch(() => {});
+      }
+      return this.hardDelete(id);
+    }
+    const { data, error } = await supabase
+      .from('guha_cloud_files')
+      .update({ deleted_at: new Date().toISOString() })
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  },
+
+  async restore(id) {
+    if (!(await _checkDeletedAt())) throw new Error('Recycle bin not available');
+    const { data, error } = await supabase
+      .from('guha_cloud_files')
+      .update({ deleted_at: null })
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
   },
 
   async getStorageStats(ownerId) {
@@ -120,28 +152,6 @@ const File = {
     const { data, error, count } = await q;
     if (error) throw error;
     return { data, count };
-  },
-
-  async softDelete(id) {
-    const { data, error } = await supabase
-      .from('guha_cloud_files')
-      .update({ deleted_at: new Date().toISOString() })
-      .eq('id', id)
-      .select()
-      .single();
-    if (error) throw error;
-    return data;
-  },
-
-  async restore(id) {
-    const { data, error } = await supabase
-      .from('guha_cloud_files')
-      .update({ deleted_at: null })
-      .eq('id', id)
-      .select()
-      .single();
-    if (error) throw error;
-    return data;
   },
 
   async getRecycleBin(ownerId) {
