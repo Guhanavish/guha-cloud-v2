@@ -81,24 +81,17 @@ async function loadUser() {
   }
 }
 
-async function loadFolders(parentId = null) {
+async function loadFolders() {
   try {
-    const { folders } = await api(`/folders?parentId=${parentId || ''}`);
-    renderFolders(folders, parentId);
+    const { folders } = await api('/folders');
+    renderFolders(folders);
   } catch {}
 }
 
-function renderFolders(folders, parentId, container = folderTree) {
-  const parentLi = parentId ? container.querySelector(`[data-folder-id="${parentId}"]`) : null;
-  const targetUl = parentLi ? (parentLi.querySelector('.folder-children') || createChildrenUl(parentLi)) : container;
-
-  if (!parentId) {
-    const rootItem = targetUl.querySelector('[data-folder-id="root"]');
-    targetUl.innerHTML = '';
-    if (rootItem) targetUl.appendChild(rootItem);
-  } else {
-    targetUl.innerHTML = '';
-  }
+function renderFolders(folders) {
+  const rootItem = folderTree.querySelector('[data-folder-id="root"]');
+  folderTree.innerHTML = '';
+  if (rootItem) folderTree.appendChild(rootItem);
 
   folders.forEach(f => {
     const li = document.createElement('li');
@@ -108,16 +101,8 @@ function renderFolders(folders, parentId, container = folderTree) {
     li.innerHTML = `<div class="folder-item-content"><i class="fas fa-folder"></i> <span>${escapeHtml(f.name)}</span></div>`;
     li.addEventListener('click', (e) => { e.stopPropagation(); selectFolder(f.id); });
     li.addEventListener('contextmenu', (e) => showFolderContextMenu(e, f.id, f.name));
-    targetUl.appendChild(li);
-    loadFolders(f.id);
+    folderTree.appendChild(li);
   });
-}
-
-function createChildrenUl(parentLi) {
-  const ul = document.createElement('ul');
-  ul.className = 'folder-children';
-  parentLi.appendChild(ul);
-  return ul;
 }
 
 async function selectFolder(folderId) {
@@ -131,24 +116,16 @@ async function selectFolder(folderId) {
 
 async function updateBreadcrumb() {
   if (currentFolder === 'root') {
-    breadcrumb.innerHTML = '<a href="#" data-folder="root">Root</a>';
+    breadcrumb.innerHTML = '';
     return;
   }
   try {
     const { folder } = await api(`/folders/${currentFolder}`);
-    const parts = (folder.path || folder.name).split('/').filter(Boolean);
-    breadcrumb.innerHTML = '<a href="#" data-folder="root">Root</a>';
-    let currentPath = '';
-    for (const part of parts) {
-      currentPath += '/' + part;
-      breadcrumb.innerHTML += ` <i class="fas fa-chevron-right"></i> <a href="#" data-folder="${currentPath}">${escapeHtml(part)}</a>`;
-    }
+    breadcrumb.innerHTML = `<a href="#" data-folder="${folder.id}">${escapeHtml(folder.name)}</a>`;
     breadcrumb.querySelectorAll('a').forEach(a => {
       a.addEventListener('click', (e) => {
         e.preventDefault();
-        const fid = a.dataset.folder === 'root' ? 'root' : a.dataset.folder;
-        if (fid !== 'root') selectFolder(fid);
-        else { currentFolder = 'root'; currentPage = 1; loadFiles(); updateBreadcrumb(); }
+        selectFolder(a.dataset.folder);
       });
     });
   } catch {}
@@ -313,7 +290,7 @@ async function uploadSingle(file, container) {
 }
 
 async function uploadChunked(file, container) {
-  const CHUNK_SIZE = 10 * 1024 * 1024; // 10MB
+  const CHUNK_SIZE = 10 * 1024 * 1024;
   const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
 
   const item = createUploadItem(file.name);
@@ -410,10 +387,11 @@ function showContextMenu(e, id, type) {
   menu.innerHTML = `
     <button class="context-menu-item" data-action="download"><i class="fas fa-download"></i> Download</button>
     <button class="context-menu-item" data-action="rename"><i class="fas fa-edit"></i> Rename</button>
+    <button class="context-menu-item" data-action="move"><i class="fas fa-folder-open"></i> Move to Folder</button>
     <button class="context-menu-item danger" data-action="delete"><i class="fas fa-trash"></i> Delete</button>`;
   document.body.appendChild(menu);
   menu.querySelectorAll('.context-menu-item').forEach(btn => {
-    btn.addEventListener('click', () => { menu.remove(); const a = btn.dataset.action; if (a === 'download') downloadFile(id); else if (a === 'rename') showRenameModal(id, type); else if (a === 'delete') deleteFile(id); });
+    btn.addEventListener('click', () => { menu.remove(); const a = btn.dataset.action; if (a === 'download') downloadFile(id); else if (a === 'rename') showRenameModal(id, type); else if (a === 'move') showMoveModal(id); else if (a === 'delete') deleteFile(id); });
   });
   document.addEventListener('click', function cm() { menu.remove(); document.removeEventListener('click', cm); }, { once: true });
 }
@@ -430,10 +408,117 @@ function showFolderContextMenu(e, id, name) {
     <button class="context-menu-item danger" data-action="delete"><i class="fas fa-trash"></i> Delete</button>`;
   document.body.appendChild(menu);
   menu.querySelectorAll('.context-menu-item').forEach(btn => {
-    btn.addEventListener('click', () => { menu.remove(); const a = btn.dataset.action; if (a === 'rename') showRenameModal(id, 'folder'); else if (a === 'delete') deleteFolder(id); });
+    btn.addEventListener('click', () => { menu.remove(); const a = btn.dataset.action; if (a === 'rename') showRenameModal(id, 'folder'); else if (a === 'delete') showDeleteFolderModal(id, name); });
   });
   document.addEventListener('click', function cm() { menu.remove(); document.removeEventListener('click', cm); }, { once: true });
 }
+
+// --- Move to Folder ---
+const moveModal = document.getElementById('moveModal');
+const moveFolderList = document.getElementById('moveFolderList');
+const moveFileId = document.getElementById('moveFileId');
+const cancelMoveBtn = document.getElementById('cancelMoveBtn');
+const moveToRootBtn = document.getElementById('moveToRootBtn');
+const confirmMoveBtn = document.getElementById('confirmMoveBtn');
+let moveSelectedFolderId = null;
+
+async function showMoveModal(fileId) {
+  moveFileId.value = fileId;
+  moveSelectedFolderId = null;
+  confirmMoveBtn.disabled = true;
+  moveFolderList.innerHTML = '<div style="padding:8px;color:var(--text-muted);font-size:13px;">Loading...</div>';
+  moveModal.classList.remove('hidden');
+
+  try {
+    const { folders } = await api('/folders');
+    moveFolderList.innerHTML = '';
+    if (folders.length === 0) {
+      moveFolderList.innerHTML = '<div style="padding:8px;color:var(--text-muted);font-size:13px;">No folders yet</div>';
+      return;
+    }
+    folders.forEach(f => {
+      const div = document.createElement('div');
+      div.className = 'context-menu-item';
+      div.textContent = f.name;
+      div.dataset.folderId = f.id;
+      div.addEventListener('click', () => {
+        moveFolderList.querySelectorAll('.context-menu-item').forEach(el => el.style.background = '');
+        div.style.background = 'var(--primary-glow)';
+        moveSelectedFolderId = f.id;
+        confirmMoveBtn.disabled = false;
+      });
+      moveFolderList.appendChild(div);
+    });
+  } catch (e) {
+    moveFolderList.innerHTML = '<div style="padding:8px;color:var(--danger);font-size:13px;">Failed to load folders</div>';
+  }
+}
+
+cancelMoveBtn.addEventListener('click', () => moveModal.classList.add('hidden'));
+moveModal.querySelector('.modal-overlay')?.addEventListener('click', () => moveModal.classList.add('hidden'));
+
+moveToRootBtn.addEventListener('click', async () => {
+  const id = moveFileId.value;
+  if (!id) return;
+  try {
+    await api(`/files/${id}/move`, { method: 'PUT', body: JSON.stringify({ folderId: null }) });
+    moveModal.classList.add('hidden');
+    loadFiles();
+  } catch (e) { showError(e.message); }
+});
+
+confirmMoveBtn.addEventListener('click', async () => {
+  const id = moveFileId.value;
+  if (!id || !moveSelectedFolderId) return;
+  try {
+    await api(`/files/${id}/move`, { method: 'PUT', body: JSON.stringify({ folderId: moveSelectedFolderId }) });
+    moveModal.classList.add('hidden');
+    loadFiles();
+  } catch (e) { showError(e.message); }
+});
+
+// --- Delete Folder Modal ---
+const deleteFolderModal = document.getElementById('deleteFolderModal');
+const deleteFolderName = document.getElementById('deleteFolderName');
+const deleteFolderId = document.getElementById('deleteFolderId');
+const deleteFolderMoveBtn = document.getElementById('deleteFolderMoveBtn');
+const deleteFolderDeleteBtn = document.getElementById('deleteFolderDeleteBtn');
+const cancelDeleteFolderBtn = document.getElementById('cancelDeleteFolderBtn');
+
+function showDeleteFolderModal(id, name) {
+  deleteFolderId.value = id;
+  deleteFolderName.textContent = name;
+  deleteFolderModal.classList.remove('hidden');
+}
+
+cancelDeleteFolderBtn.addEventListener('click', () => deleteFolderModal.classList.add('hidden'));
+deleteFolderModal.querySelector('.modal-overlay')?.addEventListener('click', () => deleteFolderModal.classList.add('hidden'));
+
+deleteFolderMoveBtn.addEventListener('click', async () => {
+  const id = deleteFolderId.value;
+  if (!id) return;
+  try {
+    await api(`/folders/${id}`, { method: 'DELETE', body: JSON.stringify({ mode: 'move' }) });
+    deleteFolderModal.classList.add('hidden');
+    if (currentFolder === id) { currentFolder = 'root'; }
+    currentPage = 1;
+    await Promise.all([loadFolders(), loadFiles(), loadUser()]);
+    if (currentFolder === 'root') await updateBreadcrumb();
+  } catch (err) { showError(err.message); }
+});
+
+deleteFolderDeleteBtn.addEventListener('click', async () => {
+  const id = deleteFolderId.value;
+  if (!id) return;
+  try {
+    await api(`/folders/${id}`, { method: 'DELETE', body: JSON.stringify({ mode: 'delete' }) });
+    deleteFolderModal.classList.add('hidden');
+    if (currentFolder === id) { currentFolder = 'root'; }
+    currentPage = 1;
+    await Promise.all([loadFolders(), loadFiles(), loadUser()]);
+    if (currentFolder === 'root') await updateBreadcrumb();
+  } catch (err) { showError(err.message); }
+});
 
 // --- Modals ---
 const folderModal = document.getElementById('folderModal');
@@ -450,8 +535,7 @@ folderModal.querySelector('.modal-overlay').addEventListener('click', () => fold
 folderForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   try {
-    const parentId = currentFolder === 'root' ? null : currentFolder;
-    await api('/folders', { method: 'POST', body: JSON.stringify({ name: folderName.value, parentId }) });
+    await api('/folders', { method: 'POST', body: JSON.stringify({ name: folderName.value }) });
     folderModal.classList.add('hidden');
     loadFolders();
   } catch (err) { showError(err.message); }
@@ -495,17 +579,6 @@ async function deleteFile(id) {
   try { await api(`/files/${id}`, { method: 'DELETE' }); loadFiles(); loadUser(); } catch (err) { showError(err.message); }
 }
 
-async function deleteFolder(id) {
-  if (!confirm('Delete this folder and all its contents?')) return;
-  try {
-    await api(`/folders/${id}`, { method: 'DELETE' });
-    if (currentFolder === id) { currentFolder = 'root'; }
-    currentPage = 1;
-    await Promise.all([loadFolders(), loadFiles(), loadUser()]);
-    if (currentFolder === 'root') await updateBreadcrumb();
-  } catch (err) { showError(err.message); }
-}
-
 const usernameModal = document.getElementById('usernameModal');
 const usernameForm = document.getElementById('usernameForm');
 const newUsername = document.getElementById('newUsername');
@@ -545,7 +618,12 @@ document.getElementById('sortSelect').addEventListener('change', (e) => { curren
 document.getElementById('searchInput').addEventListener('input', debounce(async (e) => {
   const q = e.target.value.trim();
   if (!q) return loadFiles();
-  try { const { files } = await api(`/files/search?q=${encodeURIComponent(q)}&folderId=${currentFolder !== 'root' ? currentFolder : ''}`); renderFiles(files); pagination.classList.add('hidden'); } catch {}
+  try {
+    const params = new URLSearchParams({ q: encodeURIComponent(q) });
+    if (currentFolder !== 'root') params.append('folderId', currentFolder);
+    const { files } = await api(`/files/search?${params}`);
+    renderFiles(files); pagination.classList.add('hidden');
+  } catch {}
 }, 300));
 prevPage.addEventListener('click', () => { if (currentPage > 1) { currentPage--; loadFiles(); } });
 nextPage.addEventListener('click', () => { currentPage++; loadFiles(); });
@@ -576,16 +654,12 @@ document.addEventListener('click', (e) => {
 
 document.querySelectorAll('.modal-close').forEach(btn => btn.addEventListener('click', () => btn.closest('.modal').classList.add('hidden')));
 
-// Storage backend switch - update stats
 backendSelect?.addEventListener('change', loadStorageStats);
 
-// Root "All Files" click handler
 document.querySelector('#folderTree > .folder-item[data-folder-id="root"]')?.addEventListener('click', () => selectFolder('root'));
 
-// Home button
 document.getElementById('homeBtn')?.addEventListener('click', () => { selectFolder('root'); document.querySelectorAll('.folder-item').forEach(el => el.classList.toggle('active', el.dataset.folderId === 'root')); });
 
-// Mobile menu
 const menuToggle = document.getElementById('menuToggle');
 const sidebar = document.getElementById('sidebar');
 const sidebarBackdrop = document.getElementById('sidebarBackdrop');
@@ -597,7 +671,6 @@ window.addEventListener('resize', () => { if (window.innerWidth > 768) { closeSi
 
 function debounce(fn, ms) { let t; return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); }; }
 
-// Init
 (async function init() {
   (function() {
     const saved = localStorage.getItem('theme') || 'dark';

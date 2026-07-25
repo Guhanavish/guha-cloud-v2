@@ -5,23 +5,15 @@ const AppError = require('../utils/AppError');
 
 exports.createFolder = async (req, res, next) => {
   try {
-    const { name, parentId } = req.body;
+    const { name } = req.body;
 
     if (!name || !name.trim()) {
       return next(new AppError('Folder name is required', 400));
     }
 
-    if (parentId) {
-      const parent = await Folder.findById(parentId);
-      if (!parent || parent.owner_id !== req.user.id) {
-        return next(new AppError('Parent folder not found', 404));
-      }
-    }
-
     const folder = await Folder.create({
       name: name.trim(),
-      owner: req.user.id,
-      parent: parentId || null
+      owner: req.user.id
     });
 
     res.status(201).json({ folder });
@@ -32,8 +24,7 @@ exports.createFolder = async (req, res, next) => {
 
 exports.getFolders = async (req, res, next) => {
   try {
-    const { parentId } = req.query;
-    const folders = await Folder.findByOwner(req.user.id, parentId || null);
+    const folders = await Folder.findByOwner(req.user.id);
     res.json({ folders });
   } catch (error) {
     next(error);
@@ -72,23 +63,35 @@ exports.updateFolder = async (req, res, next) => {
 
 exports.deleteFolder = async (req, res, next) => {
   try {
+    const { mode } = req.body;
     const folder = await Folder.findById(req.params.id);
     if (!folder || folder.owner_id !== req.user.id) {
       return next(new AppError('Folder not found', 404));
     }
 
-    // Calculate total file sizes before deletion
-    const deletedSize = await Folder.getTotalSizeRecursive(req.params.id);
+    if (mode === 'move') {
+      // Move all files in folder to root
+      const { data: files } = await require('../lib/supabase')
+        .from('guha_cloud_files')
+        .select('*')
+        .eq('folder_id', req.params.id);
+      for (const file of files || []) {
+        await File.update(file.id, { folder_id: null });
+      }
+      await Folder.delete(req.params.id);
+      return res.json({ message: 'Folder deleted, files moved to root' });
+    }
 
+    // Default: delete all contents
+    const deletedSize = await Folder.getTotalSizeRecursive(req.params.id);
     await Folder.delete(req.params.id);
 
-    // Update user's storage used
     if (deletedSize > 0) {
       const user = await User.findById(req.user.id);
       await User.update(req.user.id, { storage_used: Math.max(0, user.storage_used - deletedSize) });
     }
 
-    res.json({ message: 'Folder deleted successfully' });
+    res.json({ message: 'Folder and contents deleted successfully' });
   } catch (error) {
     next(error);
   }

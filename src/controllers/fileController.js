@@ -223,13 +223,14 @@ exports.getStorageStats = async (req, res, next) => {
 
 exports.searchFiles = async (req, res, next) => {
   try {
-    const { q, page = 1, limit = 20 } = req.query;
+    const { q, folderId, page = 1, limit = 20 } = req.query;
     if (!q || !q.trim()) {
       return res.json({ files: [], pagination: { page: 1, limit: 20, total: 0, pages: 0 } });
     }
 
     const options = {
       search: q.trim(),
+      folderId: folderId || null,
       limit: parseInt(limit),
       offset: (parseInt(page) - 1) * parseInt(limit),
       sort: '-created_at'

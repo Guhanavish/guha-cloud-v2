@@ -7,16 +7,23 @@
   <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
-  <div class="particles" id="particles"></div>
+  <canvas id="bgCanvas"></canvas>
   <div class="landing-container">
     <div class="landing-card">
       <div class="logo-animation">
-        <svg class="cloud-svg" viewBox="0 0 100 100">
-          <path class="cloud-path" d="M25 65 Q15 65 15 55 Q15 45 25 45 Q20 38 30 35 Q40 30 50 30 Q60 30 70 35 Q80 38 75 45 Q85 45 85 55 Q85 65 75 65 Z" fill="none" stroke="var(--primary)" stroke-width="2"/>
+        <svg class="cloud-svg" viewBox="0 0 100 80" width="80" height="64">
+          <defs>
+            <linearGradient id="cloudGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#6366f1"/>
+              <stop offset="100%" stop-color="#a855f7"/>
+            </linearGradient>
+          </defs>
+          <path d="M25 60 Q15 60 15 50 Q15 40 25 40 Q20 32 32 28 Q42 24 52 24 Q62 24 72 28 Q82 32 77 40 Q87 40 87 50 Q87 60 77 60 Z" fill="none" stroke="url(#cloudGrad)" stroke-width="2.5"/>
+          <path d="M25 60 Q15 60 15 50 Q15 40 25 40 Q20 32 32 28 Q42 24 52 24 Q62 24 72 28 Q82 32 77 40 Q87 40 87 50 Q87 60 77 60 Z" fill="url(#cloudGrad)" opacity="0.08"/>
         </svg>
       </div>
       <h1>Guha Cloud</h1>
-      <p class="subtitle">Personal cloud storage. Encrypted. Private. Yours.</p>
+      <p class="subtitle">Personal cloud storage. Powered by Supabase &amp; Backblaze B2.</p>
       <div class="landing-actions">
         <a href="/login" class="btn btn-primary btn-lg">
           <span>Sign In</span>
@@ -26,113 +33,93 @@
           </svg>
         </a>
       </div>
-      <div class="features">
-        <div class="feature">
-          <div class="feature-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-              <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-            </svg>
-          </div>
-          <span>End-to-End Encryption</span>
-        </div>
-        <div class="feature">
-          <div class="feature-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-            </svg>
-          </div>
-          <span>Smart Organization</span>
-        </div>
-        <div class="feature">
-          <div class="feature-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-              <polyline points="17 8 12 3 7 8"/>
-              <line x1="12" y1="3" x2="12" y2="15"/>
-            </svg>
-          </div>
-          <span>Drag & Drop Upload</span>
-        </div>
-        <div class="feature">
-          <div class="feature-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="12" cy="12" r="10"/>
-              <path d="M12 6v6l4 2"/>
-            </svg>
-          </div>
-          <span>512MB Free Tier</span>
-        </div>
+      <div class="tech-badges">
+        <span class="tech-badge supabase"><svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M11.9 22.3c-.4.4-.9.4-1.2.1-.3-.3-.2-.8.1-1.2l4.5-5.5c.4-.5.1-1.3-.6-1.3H9.5c-.6 0-1.1-.3-1.3-.8s-.1-1.1.2-1.5l5.5-6.5c.4-.4.9-.4 1.2-.1.3.3.2.8-.1 1.2l-4.5 5.5c-.4.5-.1 1.3.6 1.3h5.6c.6 0 1.1.3 1.3.8s.1 1.1-.2 1.5l-5.5 6.5z"/></svg> Supabase</span>
+        <span class="tech-badge b2"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg> Backblaze B2</span>
       </div>
-      <div class="tech-badge">
-        <span>Node.js</span>
-        <span>MongoDB</span>
-        <span>Express</span>
-        <span>Vanilla JS</span>
-      </div>
+      <div class="attribution">Inspired idea from <a href="https://haricloud.tech" target="_blank" rel="noopener">haricloud.tech</a></div>
     </div>
   </div>
   <script>
-    // Particle animation
-    const canvas = document.getElementById('particles');
+    const canvas = document.getElementById('bgCanvas');
     const ctx = canvas.getContext('2d');
     let particles = [];
-    
+    let time = 0;
+
     function resize() {
       canvas.width = window.innerWidth;
       canvas.height = window.innerHeight;
     }
     resize();
     window.addEventListener('resize', resize);
-    
+
     class Particle {
-      constructor() {
-        this.reset();
-      }
+      constructor() { this.reset(); }
       reset() {
         this.x = Math.random() * canvas.width;
         this.y = Math.random() * canvas.height;
-        this.size = Math.random() * 2 + 0.5;
-        this.speedX = (Math.random() - 0.5) * 0.5;
-        this.speedY = (Math.random() - 0.5) * 0.5;
-        this.opacity = Math.random() * 0.5 + 0.1;
+        this.size = Math.random() * 2.5 + 0.5;
+        this.speedX = (Math.random() - 0.5) * 0.3;
+        this.speedY = (Math.random() - 0.5) * 0.3;
+        this.opacity = Math.random() * 0.4 + 0.05;
+        this.hue = Math.random() < 0.5 ? 240 : 280;
       }
       update() {
         this.x += this.speedX;
         this.y += this.speedY;
-        if (this.x < 0 || this.x > canvas.width || this.y < 0 || this.y > canvas.height) {
-          this.reset();
-        }
+        if (this.x < -10 || this.x > canvas.width + 10 || this.y < -10 || this.y > canvas.height + 10) this.reset();
       }
       draw() {
         ctx.beginPath();
         ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(59, 130, 246, ${this.opacity})`;
+        ctx.fillStyle = `hsla(${this.hue}, 60%, 60%, ${this.opacity})`;
         ctx.fill();
       }
     }
-    
-    for (let i = 0; i < 80; i++) {
-      particles.push(new Particle());
+
+    for (let i = 0; i < 60; i++) particles.push(new Particle());
+
+    function drawGradientMesh() {
+      const grd = ctx.createRadialGradient(canvas.width * 0.5, canvas.height * 0.5, 0, canvas.width * 0.5, canvas.height * 0.5, canvas.width * 0.7);
+      grd.addColorStop(0, 'rgba(99,102,241,0.04)');
+      grd.addColorStop(0.4, 'rgba(168,85,247,0.02)');
+      grd.addColorStop(1, 'transparent');
+      ctx.fillStyle = grd;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      for (let i = 0; i < 3; i++) {
+        const cx = canvas.width * (0.2 + Math.sin(time * 0.0003 + i * 2) * 0.3);
+        const cy = canvas.height * (0.3 + Math.cos(time * 0.0004 + i * 2) * 0.3);
+        const r = canvas.width * 0.4;
+        const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+        g.addColorStop(0, `hsla(${240 + i * 20}, 50%, 60%, 0.02)`);
+        g.addColorStop(1, 'transparent');
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      }
     }
-    
+
     function animate() {
+      time++;
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      particles.forEach(p => {
-        p.update();
-        p.draw();
-      });
-      // Draw connections
+
+      ctx.fillStyle = 'var(--bg)';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      drawGradientMesh();
+
+      particles.forEach(p => { p.update(); p.draw(); });
+
       for (let i = 0; i < particles.length; i++) {
         for (let j = i + 1; j < particles.length; j++) {
           const dx = particles[i].x - particles[j].x;
           const dy = particles[i].y - particles[j].y;
           const dist = Math.sqrt(dx * dx + dy * dy);
-          if (dist < 120) {
+          if (dist < 100) {
             ctx.beginPath();
             ctx.moveTo(particles[i].x, particles[i].y);
             ctx.lineTo(particles[j].x, particles[j].y);
-            ctx.strokeStyle = `rgba(59, 130, 246, ${0.1 * (1 - dist / 120)})`;
+            ctx.strokeStyle = `hsla(240, 50%, 60%, ${0.04 * (1 - dist / 100)})`;
             ctx.lineWidth = 0.5;
             ctx.stroke();
           }
@@ -141,14 +128,6 @@
       requestAnimationFrame(animate);
     }
     animate();
-    
-    // Animate cloud SVG
-    const cloudPath = document.querySelector('.cloud-path');
-    let dashOffset = 0;
-    setInterval(() => {
-      dashOffset -= 2;
-      cloudPath.style.strokeDashoffset = dashOffset;
-    }, 50);
   </script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </body>

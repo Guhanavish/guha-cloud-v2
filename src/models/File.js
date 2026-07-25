@@ -103,6 +103,9 @@ const File = {
   async searchFiles(ownerId, searchTerm, options = {}) {
     let q = supabase.from('guha_cloud_files').select('*', { count: 'exact' }).eq('owner_id', ownerId);
     q = q.ilike('original_name', `%${searchTerm}%`);
+    if (options.folderId) {
+      q = q.eq('folder_id', options.folderId);
+    }
     if (options.limit) q = q.limit(options.limit);
     if (options.offset) q = q.range(options.offset, options.offset + (options.limit || 20) - 1);
     q = q.order('created_at', { ascending: false });

@@ -2,10 +2,10 @@ const supabase = require('../lib/supabase');
 const storage = require('../services/storage');
 
 const Folder = {
-  async create({ name, owner, parent }) {
+  async create({ name, owner }) {
     const { data, error } = await supabase
       .from('guha_cloud_folders')
-      .insert({ name, owner_id: owner, parent_id: parent || null })
+      .insert({ name, owner_id: owner, parent_id: null })
       .select()
       .single();
     if (error) throw error;
@@ -14,11 +14,6 @@ const Folder = {
 
   async findByOwner(ownerId, parentId = null) {
     let query = supabase.from('guha_cloud_folders').select('*').eq('owner_id', ownerId);
-    if (parentId) {
-      query = query.eq('parent_id', parentId);
-    } else {
-      query = query.is('parent_id', null);
-    }
     query = query.order('name');
     const { data, error } = await query;
     if (error) throw error;

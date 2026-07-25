@@ -7,18 +7,31 @@
   <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
+  <canvas id="bgCanvas"></canvas>
   <button id="themeToggle" class="btn btn-secondary btn-icon" aria-label="Toggle theme" style="position: fixed; top: 20px; right: 20px; z-index: 100;">
     <i class="fas fa-moon"></i>
   </button>
   <div class="auth-container">
     <div class="auth-card">
       <div class="auth-header">
-        <h1>☁️ Guha Cloud</h1>
-        <p>Sign in to access your files</p>
+        <div class="logo-animation" style="margin-bottom:8px;">
+          <svg class="cloud-svg" viewBox="0 0 100 80" width="48" height="38">
+            <defs>
+              <linearGradient id="cloudGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#6366f1"/>
+                <stop offset="100%" stop-color="#a855f7"/>
+              </linearGradient>
+            </defs>
+            <path d="M25 60 Q15 60 15 50 Q15 40 25 40 Q20 32 32 28 Q42 24 52 24 Q62 24 72 28 Q82 32 77 40 Q87 40 87 50 Q87 60 77 60 Z" fill="none" stroke="url(#cloudGrad)" stroke-width="2.5"/>
+            <path d="M25 60 Q15 60 15 50 Q15 40 25 40 Q20 32 32 28 Q42 24 52 24 Q62 24 72 28 Q82 32 77 40 Q87 40 87 50 Q87 60 77 60 Z" fill="url(#cloudGrad)" opacity="0.08"/>
+          </svg>
+        </div>
+        <h1>Guha Cloud</h1>
+        <p>Sign in to your personal cloud</p>
       </div>
       <form id="loginForm" class="auth-form">
         <div class="form-group">
-          <label for="identifier">Email or Username</label>
+          <label for="identifier">Username</label>
           <input type="text" id="identifier" name="identifier" required autocomplete="username">
         </div>
         <div class="form-group">
@@ -27,21 +40,116 @@
         </div>
         <button type="submit" class="btn btn-primary btn-block">Sign In</button>
       </form>
-      <div class="auth-footer">
-        <p>Single user system. No registration available.</p>
-      </div>
       <div id="errorMessage" class="error-message hidden"></div>
+      <div class="auth-footer">
+        <div class="tech-badges" style="margin-bottom:12px;">
+          <span class="tech-badge supabase"><svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor"><path d="M11.9 22.3c-.4.4-.9.4-1.2.1-.3-.3-.2-.8.1-1.2l4.5-5.5c.4-.5.1-1.3-.6-1.3H9.5c-.6 0-1.1-.3-1.3-.8s-.1-1.1.2-1.5l5.5-6.5c.4-.4.9-.4 1.2-.1.3.3.2.8-.1 1.2l-4.5 5.5c-.4.5-.1 1.3.6 1.3h5.6c.6 0 1.1.3 1.3.8s.1 1.1-.2 1.5l-5.5 6.5z"/></svg> Supabase</span>
+          <span class="tech-badge b2"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg> B2</span>
+        </div>
+        <div class="attribution">Inspired idea from <a href="https://haricloud.tech" target="_blank" rel="noopener">haricloud.tech</a></div>
+      </div>
     </div>
   </div>
   <script src="/js/auth.js"></script>
   <script>
+    // Background canvas
+    const canvas = document.getElementById('bgCanvas');
+    const ctx = canvas.getContext('2d');
+    let particles = [];
+    let time = 0;
+
+    function resize() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+    resize();
+    window.addEventListener('resize', resize);
+
+    class Particle {
+      constructor() { this.reset(); }
+      reset() {
+        this.x = Math.random() * canvas.width;
+        this.y = Math.random() * canvas.height;
+        this.size = Math.random() * 2.5 + 0.5;
+        this.speedX = (Math.random() - 0.5) * 0.3;
+        this.speedY = (Math.random() - 0.5) * 0.3;
+        this.opacity = Math.random() * 0.4 + 0.05;
+        this.hue = Math.random() < 0.5 ? 240 : 280;
+      }
+      update() {
+        this.x += this.speedX;
+        this.y += this.speedY;
+        if (this.x < -10 || this.x > canvas.width + 10 || this.y < -10 || this.y > canvas.height + 10) this.reset();
+      }
+      draw() {
+        ctx.beginPath();
+        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+        ctx.fillStyle = `hsla(${this.hue}, 60%, 60%, ${this.opacity})`;
+        ctx.fill();
+      }
+    }
+
+    for (let i = 0; i < 60; i++) particles.push(new Particle());
+
+    function drawGradientMesh() {
+      const grd = ctx.createRadialGradient(canvas.width * 0.5, canvas.height * 0.5, 0, canvas.width * 0.5, canvas.height * 0.5, canvas.width * 0.7);
+      grd.addColorStop(0, 'rgba(99,102,241,0.04)');
+      grd.addColorStop(0.4, 'rgba(168,85,247,0.02)');
+      grd.addColorStop(1, 'transparent');
+      ctx.fillStyle = grd;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      for (let i = 0; i < 3; i++) {
+        const cx = canvas.width * (0.2 + Math.sin(time * 0.0003 + i * 2) * 0.3);
+        const cy = canvas.height * (0.3 + Math.cos(time * 0.0004 + i * 2) * 0.3);
+        const r = canvas.width * 0.4;
+        const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+        g.addColorStop(0, `hsla(${240 + i * 20}, 50%, 60%, 0.02)`);
+        g.addColorStop(1, 'transparent');
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+      }
+    }
+
+    function animate() {
+      time++;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      const computed = getComputedStyle(document.documentElement);
+      const bg = getComputedStyle(document.body).backgroundColor || '#08080e';
+      ctx.fillStyle = bg;
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      drawGradientMesh();
+
+      particles.forEach(p => { p.update(); p.draw(); });
+
+      for (let i = 0; i < particles.length; i++) {
+        for (let j = i + 1; j < particles.length; j++) {
+          const dx = particles[i].x - particles[j].x;
+          const dy = particles[i].y - particles[j].y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          if (dist < 100) {
+            ctx.beginPath();
+            ctx.moveTo(particles[i].x, particles[i].y);
+            ctx.lineTo(particles[j].x, particles[j].y);
+            ctx.strokeStyle = `hsla(240, 50%, 60%, ${0.04 * (1 - dist / 100)})`;
+            ctx.lineWidth = 0.5;
+            ctx.stroke();
+          }
+        }
+      }
+      requestAnimationFrame(animate);
+    }
+    animate();
+
     // Theme toggle
     const themeBtn = document.getElementById('themeToggle');
     const html = document.documentElement;
-    const saved = localStorage.getItem('theme') || 'light';
+    const saved = localStorage.getItem('theme') || 'dark';
     html.setAttribute('data-theme', saved);
-    themeBtn.innerHTML = saved === 'dark' ? '<i class="fas fa-sun"></i>' : '<i class="fas fa-moon"></i>';
-    
+    themeBtn.innerHTML = saved === 'dark' ? '<i class="fas fa-moon"></i>' : '<i class="fas fa-sun"></i>';
+
     themeBtn.addEventListener('click', () => {
       const isDark = html.getAttribute('data-theme') === 'dark';
       html.setAttribute('data-theme', isDark ? 'light' : 'dark');
