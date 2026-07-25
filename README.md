@@ -1,6 +1,6 @@
 # Cloud Storage Website
 
-Personal cloud storage with user authentication, file upload/download, folder management, and 5GB storage per user.
+Personal cloud storage with user authentication, file upload/download, folder management
 
 ## Tech Stack
 
