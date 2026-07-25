@@ -9,6 +9,7 @@ const { idParamValidation, paginationValidation, renameValidation, moveValidatio
 router.use(authenticate);
 
 router.get('/stats', fileController.getStorageStats);
+router.get('/recycle', fileController.getRecycleBin);
 router.get('/search', paginationValidation, fileController.searchFiles);
 router.get('/', paginationValidation, fileController.getFiles);
 router.post('/upload', handleMultipleUpload, fileController.uploadFiles);
@@ -16,6 +17,8 @@ router.get('/:id', idParamValidation, fileController.getFile);
 router.get('/:id/download', idParamValidation, fileController.downloadFile);
 router.put('/:id', idParamValidation, renameValidation, fileController.renameFile);
 router.put('/:id/move', idParamValidation, moveValidation, fileController.moveFile);
+router.post('/:id/restore', idParamValidation, fileController.restoreFile);
+router.delete('/:id/forever', idParamValidation, fileController.permanentDeleteFile);
 router.delete('/:id', idParamValidation, fileController.deleteFile);
 
 router.post('/folders', folderValidation, folderController.createFolder);

@@ -66,6 +66,14 @@
           </li>
         </ul>
       </div>
+      <div class="sidebar-section" style="margin-top:12px;">
+        <h3 class="sidebar-title">Trash</h3>
+        <ul class="folder-tree">
+          <li class="folder-item" id="recycleBinBtn">
+            <div class="folder-item-content"><i class="fas fa-trash" style="color:var(--text-muted);"></i> <span>Recycle Bin</span></div>
+          </li>
+        </ul>
+      </div>
     </aside>
 
     <main class="content">
@@ -74,6 +82,7 @@
           <span class="selection-count hidden" id="selectionCount"><span id="selectedCount">0</span> selected</span>
         </div>
         <div class="toolbar-right">
+          <button id="moveSelectedBtn" class="btn btn-secondary btn-sm" disabled><i class="fas fa-folder-open"></i> Move</button>
           <button id="downloadSelectedBtn" class="btn btn-secondary btn-sm" disabled><i class="fas fa-download"></i> Download</button>
           <button id="deleteSelectedBtn" class="btn btn-danger btn-sm" disabled><i class="fas fa-trash"></i> Delete</button>
         </div>
@@ -130,11 +139,11 @@
     <div class="modal-overlay"></div>
     <div class="modal-content">
       <div class="modal-header"><h3>Move to Folder</h3><button class="modal-close">&times;</button></div>
+      <p id="moveModalDesc" style="font-size:13px;color:var(--text-muted);margin-bottom:12px;"></p>
       <div class="form-group">
         <label>Choose folder</label>
         <div id="moveFolderList" style="max-height:200px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius-sm);padding:4px;"></div>
       </div>
-      <input type="hidden" id="moveFileId">
       <div class="modal-actions">
         <button type="button" id="cancelMoveBtn" class="btn btn-secondary">Cancel</button>
         <button type="button" id="moveToRootBtn" class="btn btn-secondary">Root</button>

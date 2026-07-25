@@ -146,10 +146,53 @@ exports.deleteFile = async (req, res, next) => {
       return next(new AppError('File not found', 404));
     }
 
+    await File.softDelete(fileRecord.id);
+
+    res.json({ message: 'File moved to recycle bin' });
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.getRecycleBin = async (req, res, next) => {
+  try {
+    const files = await File.getRecycleBin(req.user.id);
+    res.json({ files });
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.restoreFile = async (req, res, next) => {
+  try {
+    const fileRecord = await File.findById(req.params.id);
+    if (!fileRecord || fileRecord.owner_id !== req.user.id) {
+      return next(new AppError('File not found', 404));
+    }
+    if (!fileRecord.deleted_at) {
+      return next(new AppError('File is not in recycle bin', 400));
+    }
+
+    await File.restore(fileRecord.id);
+    res.json({ message: 'File restored successfully' });
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.permanentDeleteFile = async (req, res, next) => {
+  try {
+    const fileRecord = await File.findById(req.params.id);
+    if (!fileRecord || fileRecord.owner_id !== req.user.id) {
+      return next(new AppError('File not found', 404));
+    }
+    if (!fileRecord.deleted_at) {
+      return next(new AppError('File is not in recycle bin', 400));
+    }
+
     await storage.deleteFile(fileRecord);
     await File.delete(fileRecord.id);
-
-    res.json({ message: 'File deleted successfully' });
+    res.json({ message: 'File permanently deleted' });
   } catch (error) {
     next(error);
   }

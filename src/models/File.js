@@ -28,12 +28,11 @@ const File = {
   },
 
   async findByOwner(ownerId, options = {}) {
-    let query = supabase.from('guha_cloud_files').select('*', { count: 'exact' }).eq('owner_id', ownerId);
+    let query = supabase.from('guha_cloud_files').select('*', { count: 'exact' }).eq('owner_id', ownerId).is('deleted_at', null);
     
     if (options.folderId) query = query.eq('folder_id', options.folderId);
     if (options.search) query = query.ilike('original_name', `%${options.search}%`);
     
-    // Handle sort parameter for Supabase (format: column or -column for desc)
     if (options.sort) {
       const isDesc = options.sort.startsWith('-');
       const column = isDesc ? options.sort.slice(1) : options.sort;
@@ -82,7 +81,8 @@ const File = {
     const { data, error } = await supabase
       .from('guha_cloud_files')
       .select('size', { count: 'exact' })
-      .eq('owner_id', ownerId);
+      .eq('owner_id', ownerId)
+      .is('deleted_at', null);
     if (error) throw error;
     return {
       totalSize: data.reduce((sum, f) => sum + f.size, 0),
@@ -95,13 +95,14 @@ const File = {
       .from('guha_cloud_files')
       .select('size')
       .eq('owner_id', ownerId)
-      .eq('storage_backend', backend);
+      .eq('storage_backend', backend)
+      .is('deleted_at', null);
     if (error) throw error;
     return (data || []).reduce((sum, f) => sum + f.size, 0);
   },
 
   async searchFiles(ownerId, searchTerm, options = {}) {
-    let q = supabase.from('guha_cloud_files').select('*', { count: 'exact' }).eq('owner_id', ownerId);
+    let q = supabase.from('guha_cloud_files').select('*', { count: 'exact' }).eq('owner_id', ownerId).is('deleted_at', null);
     q = q.ilike('original_name', `%${searchTerm}%`);
     if (options.folderId) {
       q = q.eq('folder_id', options.folderId);
@@ -113,6 +114,56 @@ const File = {
     const { data, error, count } = await q;
     if (error) throw error;
     return { data, count };
+  },
+
+  async softDelete(id) {
+    const { data, error } = await supabase
+      .from('guha_cloud_files')
+      .update({ deleted_at: new Date().toISOString() })
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  },
+
+  async restore(id) {
+    const { data, error } = await supabase
+      .from('guha_cloud_files')
+      .update({ deleted_at: null })
+      .eq('id', id)
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  },
+
+  async getRecycleBin(ownerId) {
+    const { data, error } = await supabase
+      .from('guha_cloud_files')
+      .select('*')
+      .eq('owner_id', ownerId)
+      .not('deleted_at', 'is', null)
+      .order('deleted_at', { ascending: false });
+    if (error) throw error;
+    return data || [];
+  },
+
+  async cleanupExpired() {
+    const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString();
+    const { data: expired, error: fetchError } = await supabase
+      .from('guha_cloud_files')
+      .select('*')
+      .lt('deleted_at', twoDaysAgo);
+    if (fetchError) throw fetchError;
+    const storage = require('../services/storage');
+    await Promise.allSettled((expired || []).map(f => storage.deleteFile(f).catch(() => {})));
+    const { error: delError } = await supabase
+      .from('guha_cloud_files')
+      .delete()
+      .lt('deleted_at', twoDaysAgo);
+    if (delError) throw delError;
+    return (expired || []).length;
   },
 
   async incrementDownload(id) {

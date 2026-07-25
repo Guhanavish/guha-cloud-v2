@@ -44,21 +44,26 @@ const Folder = {
   },
 
   async delete(id) {
+    let totalDeleted = 0;
     const deleteRecursive = async (folderId) => {
-      const { data: children } = await supabase.from('guha_cloud_folders').select('id').eq('parent_id', folderId);
-      for (const child of children || []) {
-        await deleteRecursive(child.id);
-      }
-      // Delete files from storage backend and database
-      const { data: files } = await supabase.from('guha_cloud_files').select('*').eq('folder_id', folderId);
-      for (const file of files || []) {
-        await storage.deleteFile(file).catch(() => {});
-      }
-      await supabase.from('guha_cloud_files').delete().eq('folder_id', folderId);
-      await supabase.from('guha_cloud_folders').delete().eq('id', folderId);
+      const [filesResult, childrenResult] = await Promise.all([
+        supabase.from('guha_cloud_files').select('*').eq('folder_id', folderId),
+        supabase.from('guha_cloud_folders').select('id').eq('parent_id', folderId)
+      ]);
+      const files = filesResult.data || [];
+      const children = childrenResult.data || [];
+      // Delete child folders in parallel
+      await Promise.all(children.map(c => deleteRecursive(c.id)));
+      // Delete files from storage in parallel, then from DB
+      totalDeleted += files.reduce((s, f) => s + f.size, 0);
+      await Promise.allSettled(files.map(f => storage.deleteFile(f).catch(() => {})));
+      await Promise.all([
+        supabase.from('guha_cloud_files').delete().eq('folder_id', folderId),
+        supabase.from('guha_cloud_folders').delete().eq('id', folderId)
+      ]);
     };
-    
     await deleteRecursive(id);
+    return totalDeleted;
   },
 
   async move(id, newParentId) {

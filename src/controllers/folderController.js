@@ -69,29 +69,28 @@ exports.deleteFolder = async (req, res, next) => {
       return next(new AppError('Folder not found', 404));
     }
 
+    const sup = require('../lib/supabase');
+
     if (mode === 'move') {
-      // Move all files in folder to root
-      const { data: files } = await require('../lib/supabase')
-        .from('guha_cloud_files')
-        .select('*')
-        .eq('folder_id', req.params.id);
-      for (const file of files || []) {
-        await File.update(file.id, { folder_id: null });
-      }
+      const { data: files } = await sup.from('guha_cloud_files').select('id').eq('folder_id', req.params.id);
+      await Promise.all((files || []).map(f => File.update(f.id, { folder_id: null })));
       await Folder.delete(req.params.id);
       return res.json({ message: 'Folder deleted, files moved to root' });
     }
 
-    // Default: delete all contents
-    const deletedSize = await Folder.getTotalSizeRecursive(req.params.id);
+    // Soft-delete all files inside (move to recycle bin)
+    const { data: files } = await sup.from('guha_cloud_files').select('id').eq('folder_id', req.params.id);
+    await Promise.all((files || []).map(f => File.softDelete(f.id)));
+    // Calculate deleted size for storage_used update
+    const { data: sizeData } = await sup.from('guha_cloud_files').select('size').eq('folder_id', req.params.id).is('deleted_at', null);
+    const deletedSize = (sizeData || []).reduce((s, f) => s + f.size, 0);
     await Folder.delete(req.params.id);
-
     if (deletedSize > 0) {
       const user = await User.findById(req.user.id);
       await User.update(req.user.id, { storage_used: Math.max(0, user.storage_used - deletedSize) });
     }
 
-    res.json({ message: 'Folder and contents deleted successfully' });
+    res.json({ message: 'Folder and files moved to recycle bin' });
   } catch (error) {
     next(error);
   }

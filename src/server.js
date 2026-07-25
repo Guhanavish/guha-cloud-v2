@@ -135,6 +135,40 @@ app.get('*', (req, res) => {
 
 app.use(errorHandler);
 
+// Add deleted_at column if it doesn't exist
+async function ensureRecycleBinColumn() {
+  try {
+    const { data } = await supabase.from('guha_cloud_files').select('deleted_at').limit(1).maybeSingle();
+    // If no error, column exists
+    console.log('deleted_at column exists');
+  } catch {
+    // Column doesn't exist — add it via raw SQL through pg pool
+    try {
+      const pg = require('pg');
+      const pool = new pg.Pool({
+        connectionString: process.env.SUPABASE_DB_URL || process.env.DATABASE_URL,
+        ssl: IS_PRODUCTION ? { rejectUnauthorized: false } : false
+      });
+      await pool.query('ALTER TABLE guha_cloud_files ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ');
+      await pool.end();
+      console.log('Added deleted_at column');
+    } catch (alterErr) {
+      console.error('Could not add deleted_at column. Recycle bin will be unavailable:', alterErr.message);
+    }
+  }
+}
+
+// Clean up expired recycle bin files (older than 2 days)
+async function cleanupExpiredFiles() {
+  try {
+    const File = require('./models/File');
+    const count = await File.cleanupExpired();
+    if (count > 0) console.log(`Cleaned up ${count} expired recycle bin files`);
+  } catch (err) {
+    console.error('Recycle bin cleanup error:', err.message);
+  }
+}
+
 // Test Supabase connection on startup
 async function startServer() {
   try {
@@ -142,6 +176,12 @@ async function startServer() {
     if (error) throw error;
     console.log('Connected to Supabase');
     
+    await ensureRecycleBinColumn();
+    await cleanupExpiredFiles();
+
+    // Periodic cleanup every 30 minutes
+    setInterval(cleanupExpiredFiles, 30 * 60 * 1000);
+
     const server = app.listen(PORT, '0.0.0.0', () => {
       console.log(`Server running on port ${PORT}`);
     });
