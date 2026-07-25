@@ -123,6 +123,12 @@ exports.downloadFile = async (req, res, next) => {
     if (result.url) {
       return res.redirect(result.url);
     }
+    if (result.stream) {
+      res.setHeader('Content-Disposition', `attachment; filename="${fileRecord.original_name}"`);
+      res.setHeader('Content-Type', fileRecord.mime_type || 'application/octet-stream');
+      result.stream.on('error', () => { if (!res.headersSent) res.status(500).end(); });
+      return result.stream.pipe(res);
+    }
     if (result.buffer) {
       res.setHeader('Content-Disposition', `attachment; filename="${fileRecord.original_name}"`);
       return res.send(result.buffer);

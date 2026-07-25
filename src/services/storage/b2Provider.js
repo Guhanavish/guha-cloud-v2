@@ -68,8 +68,11 @@ const b2Provider = {
     const b2 = createClient();
     await b2.authorize();
 
-    const response = await b2.downloadFileById({ fileId: fileRecord.path });
-    return { buffer: response.data, fileName: fileRecord.original_name };
+    const response = await b2.downloadFileById({
+      fileId: fileRecord.path,
+      responseType: 'stream'
+    });
+    return { stream: response.data, fileName: fileRecord.original_name };
   },
 
   async startLargeFile(fileName, mimeType) {
