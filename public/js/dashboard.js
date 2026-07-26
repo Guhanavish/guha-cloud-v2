@@ -332,7 +332,7 @@ function showRecycleContextMenu(e, id) {
     <button class="context-menu-item danger" data-action="delete"><i class="fas fa-trash"></i> Delete Forever</button>`;
   document.body.appendChild(menu);
   menu.querySelectorAll('.context-menu-item').forEach(btn => {
-    btn.addEventListener('click', () => { menu.remove(); const a = btn.dataset.action; if (a === 'restore') { api(`/files/${id}/restore`, { method: 'POST' }).then(() => showRecycleBin()); } else if (a === 'delete') { if (confirm('Permanently delete this file? This cannot be undone.')) api(`/files/${id}/forever`, { method: 'DELETE' }).then(() => showRecycleBin()); } });
+    btn.addEventListener('click', () => { menu.remove(); const a = btn.dataset.action; if (a === 'restore') restoreFile(id); else if (a === 'delete') permanentDeleteFile(id); });
   });
   document.addEventListener('click', function cm() { menu.remove(); document.removeEventListener('click', cm); }, { once: true });
 }
