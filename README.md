@@ -1,10 +1,10 @@
 # Cloud Storage Website
 
-Personal cloud storage with user authentication, file upload/download, folder management, and 5GB storage per user.
+Personal cloud storage with user authentication, file upload/download, folder management
 
 ## Tech Stack
 
-- **Backend**: Node.js + Express + MongoDB (Mongoose)
+- **Backend**: Node.js + Express + Supabase + Backblaze B2
 - **Frontend**: Vanilla HTML/CSS/JS
 - **Auth**: JWT with HttpOnly cookies
 - **File Upload**: Multer (local storage)
