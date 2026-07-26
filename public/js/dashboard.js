@@ -164,11 +164,12 @@ function renderFiles(files) {
     const sb = f.path === null ? '<span class="status-badge processing">Processing</span>' : f.path === 'failed' ? '<span class="status-badge failed">Failed</span>' : '';
     if (_recycleView) {
       const expires = timeRemaining(f.deleted_at);
-      return `<div class="file-item recycle-item${selectedItems.has(f.id)?' selected':''}" data-id="${f.id}" data-type="file">
+      const isFolder = f._type === 'folder' || !f.mime_type || f.mime_type === 'folder';
+      return `<div class="file-item recycle-item${selectedItems.has(f.id)?' selected':''}" data-id="${f.id}" data-type="${isFolder?'folder':'file'}">
         <input type="checkbox" class="file-checkbox" ${selectedItems.has(f.id)?'checked':''}>
-        <i class="file-icon fas ${getFileIcon(f.mime_type)}"></i>
-        <div class="file-name" title="${esc(f.original_name)}">${esc(f.original_name)}</div>
-        <div class="file-meta"><span class="expiry-badge ${expires==='Expired'?'expired':''}">${expires}</span></div>
+        <i class="file-icon fas ${isFolder?'fa-folder':'fa-file'}"></i>
+        <div class="file-name" title="${esc(f.original_name||f.name)}">${esc(f.original_name||f.name)}</div>
+        <div class="file-meta">${isFolder?'<span class="storage-badge" style="background:rgba(234,179,8,0.12);color:var(--warning);">Folder</span>':formatBytes(f.size)} <span class="expiry-badge ${expires==='Expired'?'expired':''}">${expires}</span></div>
       </div>`;
     }
     return `<div class="file-item${selectedItems.has(f.id)?' selected':''}${!f.path||f.path==='failed'?' disabled':''}" data-id="${f.id}" data-type="file">
@@ -253,7 +254,13 @@ async function deleteSelected() {
     _busy = true;
     deleteSelectedBtn.disabled = true;
     try {
-      await Promise.all(Array.from(selectedItems).map(id => api(`/files/${id}/forever`, { method: 'DELETE' })));
+      const ids = Array.from(selectedItems);
+      await Promise.all(ids.map(id => {
+        const el = fileGrid.querySelector(`[data-id="${id}"]`);
+        return el?.dataset?.type === 'folder'
+          ? api(`/folders/${id}/forever`, { method: 'DELETE' })
+          : api(`/files/${id}/forever`, { method: 'DELETE' });
+      }));
       clearSelection();
       showRecycleBin();
     } catch (e) { alert('Delete failed: ' + e.message); }
@@ -276,7 +283,13 @@ async function restoreSelected() {
   _busy = true;
   moveSelectedBtn.disabled = true;
   try {
-    await Promise.all(Array.from(selectedItems).map(id => api(`/files/${id}/restore`, { method: 'POST' })));
+    const ids = Array.from(selectedItems);
+    await Promise.all(ids.map(id => {
+      const el = fileGrid.querySelector(`[data-id="${id}"]`);
+      return el?.dataset?.type === 'folder'
+        ? api(`/folders/${id}/restore`, { method: 'POST' })
+        : api(`/files/${id}/restore`, { method: 'POST' });
+    }));
     clearSelection();
     showRecycleBin();
   } catch (e) { alert('Restore failed: ' + e.message); }
@@ -305,11 +318,15 @@ async function showRecycleBin() {
   pagination.classList.add('hidden');
   try {
     showLoading();
-    const { files } = await api('/files/recycle');
+    const { files, folders } = await api('/files/recycle');
     emptyState.querySelector('h3').textContent = 'Recycle Bin is empty';
     emptyState.querySelector('p').textContent = 'Deleted files appear here for 2 days';
     $('emptyUploadBtn').classList.add('hidden');
-    renderFiles(files);
+    const items = [
+      ...(folders || []).map(f => ({ ...f, original_name: f.name, mime_type: 'folder', size: 0, _type: 'folder' })),
+      ...(files || []).map(f => ({ ...f, _type: 'file' }))
+    ];
+    renderFiles(items);
   } catch { showError('Failed to load recycle bin'); }
 }
 
@@ -317,17 +334,43 @@ recycleBinBtn?.addEventListener('click', showRecycleBin);
 
 function showRecycleContextMenu(e, id) {
   e.preventDefault();
+  const item = document.querySelector(`[data-id="${id}"]`);
+  const isFolder = item?.dataset?.type === 'folder';
   document.querySelector('.context-menu')?.remove();
   const menu = document.createElement('div');
   menu.className = 'context-menu';
   menu.style.left = `${e.pageX}px`; menu.style.top = `${e.pageY}px`;
   menu.innerHTML = `<button class="context-menu-item" data-action="restore"><i class="fas fa-undo"></i> Restore</button>
+    <div class="context-menu-divider"></div>
     <button class="context-menu-item danger" data-action="delete"><i class="fas fa-trash"></i> Delete Forever</button>`;
   document.body.appendChild(menu);
   menu.querySelectorAll('.context-menu-item').forEach(btn => {
-    btn.addEventListener('click', () => { menu.remove(); const a = btn.dataset.action; if (a === 'restore') restoreFile(id); else if (a === 'delete') permanentDeleteFile(id); });
+    btn.addEventListener('click', () => { menu.remove(); const a = btn.dataset.action; if (a === 'restore') restoreItem(id, isFolder); else if (a === 'delete') permanentDeleteItem(id, isFolder); });
   });
   document.addEventListener('click', function cm() { menu.remove(); document.removeEventListener('click', cm); }, { once: true });
+}
+
+async function restoreItem(id, isFolder) {
+  if (_busy) return;
+  _busy = true;
+  try {
+    if (isFolder) await api(`/folders/${id}/restore`, { method: 'POST' });
+    else await api(`/files/${id}/restore`, { method: 'POST' });
+    showRecycleBin();
+  } catch (e) { showError(e.message); }
+  _busy = false;
+}
+
+async function permanentDeleteItem(id, isFolder) {
+  if (_busy) return;
+  if (!confirm('Permanently delete this item? This cannot be undone.')) return;
+  _busy = true;
+  try {
+    if (isFolder) await api(`/folders/${id}/forever`, { method: 'DELETE' });
+    else await api(`/files/${id}/forever`, { method: 'DELETE' });
+    showRecycleBin();
+  } catch (e) { showError(e.message); }
+  _busy = false;
 }
 
 async function restoreFile(id) {
@@ -444,13 +487,15 @@ function showContextMenu(e, id) {
   const menu = document.createElement('div');
   menu.className = 'context-menu';
   menu.style.left = `${e.pageX}px`; menu.style.top = `${e.pageY}px`;
-  menu.innerHTML = `<button class="context-menu-item" data-action="download"><i class="fas fa-download"></i> Download</button>
+    menu.innerHTML = `<button class="context-menu-item" data-action="download"><i class="fas fa-download"></i> Download</button>
     <button class="context-menu-item" data-action="rename"><i class="fas fa-edit"></i> Rename</button>
     <button class="context-menu-item" data-action="move"><i class="fas fa-folder-open"></i> Move to Folder</button>
-    <button class="context-menu-item danger" data-action="delete"><i class="fas fa-trash"></i> Delete</button>`;
+    <button class="context-menu-item danger" data-action="delete"><i class="fas fa-trash"></i> Delete</button>
+    <div class="context-menu-divider"></div>
+    <button class="context-menu-item danger" data-action="delete-forever"><i class="fas fa-trash-alt"></i> Delete Forever</button>`;
   document.body.appendChild(menu);
   menu.querySelectorAll('.context-menu-item').forEach(btn => {
-    btn.addEventListener('click', () => { menu.remove(); const a = btn.dataset.action; if (a === 'download') downloadFile(id); else if (a === 'rename') showRenameModal(id, 'file'); else if (a === 'move') showMoveModal([id]); else if (a === 'delete') deleteFile(id); });
+    btn.addEventListener('click', () => { menu.remove(); const a = btn.dataset.action; if (a === 'download') downloadFile(id); else if (a === 'rename') showRenameModal(id, 'file'); else if (a === 'move') showMoveModal([id]); else if (a === 'delete') deleteFile(id); else if (a === 'delete-forever') deleteFileForever(id); });
   });
   document.addEventListener('click', function cm() { menu.remove(); document.removeEventListener('click', cm); }, { once: true });
 }
@@ -641,6 +686,22 @@ async function deleteFile(id) {
   _busy = false;
 }
 
+async function deleteFileForever(id) {
+  if (_busy) return;
+  if (!confirm('Permanently delete this file? This cannot be undone.')) return;
+  _busy = true;
+  try {
+    if (_recycleView) {
+      await api(`/files/${id}/forever`, { method: 'DELETE' });
+      showRecycleBin();
+    } else {
+      await api(`/files/${id}/forever`, { method: 'DELETE' });
+      reloadAll();
+    }
+  } catch (err) { showError(err.message); }
+  _busy = false;
+}
+
 // --- User modals ---
 const usernameModal = $('usernameModal');
 const usernameForm = $('usernameForm');
@@ -733,6 +794,31 @@ function closeSidebar() { sidebar?.classList.remove('open'); sidebarBackdrop?.cl
 window.addEventListener('resize', () => { if (window.innerWidth > 768) { closeSidebar(); if (menuToggle) menuToggle.style.display = 'none'; } else { if (menuToggle) menuToggle.style.display = 'flex'; } });
 
 function debounce(fn, ms) { let t; return (...args) => { clearTimeout(t); t = setTimeout(() => fn(...args), ms); }; }
+
+// --- Drag & Drop ---
+const dropZone = $('dropZone');
+let dragCounter = 0;
+
+document.addEventListener('dragenter', e => {
+  if (e.dataTransfer?.types.includes('Files')) {
+    e.preventDefault();
+    dragCounter++;
+    dropZone?.classList.add('show');
+  }
+});
+document.addEventListener('dragleave', e => {
+  if (e.dataTransfer?.types.includes('Files')) {
+    dragCounter--;
+    if (dragCounter <= 0) { dragCounter = 0; dropZone?.classList.remove('show'); }
+  }
+});
+document.addEventListener('dragover', e => { if (e.dataTransfer?.types.includes('Files')) e.preventDefault(); });
+document.addEventListener('drop', e => {
+  e.preventDefault();
+  dragCounter = 0;
+  dropZone?.classList.remove('show');
+  if (e.dataTransfer?.files?.length) uploadFiles(Array.from(e.dataTransfer.files));
+});
 
 (async function init() {
   (() => {

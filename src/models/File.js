@@ -88,8 +88,18 @@ const File = {
   },
 
   async softDelete(id) {
-    if (!(await _checkDeletedAt())) {
-      // Column doesn't exist — fall back to hard delete
+    try {
+      const { data, error } = await supabase
+        .from('guha_cloud_files')
+        .update({ deleted_at: new Date().toISOString() })
+        .eq('id', id)
+        .select()
+        .single();
+      if (error) throw error;
+      _hasDeletedAt = true;
+      return data;
+    } catch (err) {
+      _hasDeletedAt = false;
       const { data: file } = await supabase.from('guha_cloud_files').select('*').eq('id', id).single();
       if (file) {
         const storage = require('../services/storage');
@@ -97,14 +107,6 @@ const File = {
       }
       return this.hardDelete(id);
     }
-    const { data, error } = await supabase
-      .from('guha_cloud_files')
-      .update({ deleted_at: new Date().toISOString() })
-      .eq('id', id)
-      .select()
-      .single();
-    if (error) throw error;
-    return data;
   },
 
   async restore(id) {

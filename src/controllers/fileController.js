@@ -145,8 +145,11 @@ exports.deleteFile = async (req, res, next) => {
 
 exports.getRecycleBin = async (req, res, next) => {
   try {
-    const files = await File.getRecycleBin(req.user.id);
-    res.json({ files });
+    const [files, folders] = await Promise.all([
+      File.getRecycleBin(req.user.id),
+      Folder.getRecycleBin(req.user.id)
+    ]);
+    res.json({ files, folders });
   } catch (error) {
     next(error);
   }
@@ -175,12 +178,9 @@ exports.permanentDeleteFile = async (req, res, next) => {
     if (!fileRecord || fileRecord.owner_id !== req.user.id) {
       return next(new AppError('File not found', 404));
     }
-    if (!fileRecord.deleted_at) {
-      return next(new AppError('File is not in recycle bin', 400));
-    }
 
     await storage.deleteFile(fileRecord);
-    await File.delete(fileRecord.id);
+    await File.hardDelete(fileRecord.id);
     res.json({ message: 'File permanently deleted' });
   } catch (error) {
     next(error);
