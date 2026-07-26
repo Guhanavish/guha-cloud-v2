@@ -135,58 +135,10 @@ app.get('*', (req, res) => {
 
 app.use(errorHandler);
 
-// Add deleted_at column to both tables if missing
-async function addColumnIfMissing(table, column, definition) {
-  const { error } = await supabase.from(table).select(column).limit(1);
-  if (!error) return true;
-  const ref = (process.env.SUPABASE_URL || '').match(/https:\/\/(.+)\.supabase\.co/)?.[1];
-  if (ref && process.env.SUPABASE_SERVICE_ROLE_KEY) {
-    try {
-      const r = await fetch(`https://api.supabase.com/v1/projects/${ref}/database/query`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${process.env.SUPABASE_SERVICE_ROLE_KEY}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: `ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS ${definition}` })
-      });
-      if (r.ok) { console.log(`Added ${column} to ${table} via Management API`); return true; }
-    } catch {}
-  }
-  try {
-    const pg = require('pg');
-    const pool = new pg.Pool({
-      connectionString: process.env.SUPABASE_DB_URL || process.env.DATABASE_URL,
-      ssl: IS_PRODUCTION ? { rejectUnauthorized: false } : false
-    });
-    await pool.query(`ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS ${definition}`);
-    await pool.end();
-    console.log(`Added ${column} to ${table} via pg`);
-    return true;
-  } catch (e) { console.error(`Could not add ${column} to ${table}:`, e.message); return false; }
-}
-
-async function ensureRecycleBinColumn() {
-  const ok = await addColumnIfMissing('guha_cloud_files', 'deleted_at', 'deleted_at TIMESTAMPTZ');
-  const ok2 = await addColumnIfMissing('guha_cloud_folders', 'deleted_at', 'deleted_at TIMESTAMPTZ');
-  if (!ok) {
-    console.log('To enable Recycle Bin, run this SQL in your Supabase SQL Editor:');
-    console.log('  ALTER TABLE guha_cloud_files ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;');
-    console.log('  ALTER TABLE guha_cloud_folders ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;');
-  }
-}
-
 // Clean up expired recycle bin items (older than 2 days)
 async function cleanupExpiredFiles() {
-  try {
-    const File = require('./models/File');
-    const Folder = require('./models/Folder');
-    const [fc, fdc] = await Promise.all([
-      File.cleanupExpired(),
-      Folder.cleanupExpired()
-    ]);
-    const total = fc + fdc;
-    if (total > 0) console.log(`Cleaned up ${total} expired recycle bin items`);
-  } catch (err) {
-    console.error('Recycle bin cleanup error:', err.message);
-  }
+  const File = require('./models/File');
+  await File.cleanupExpired();
 }
 
 // Test Supabase connection on startup
@@ -196,11 +148,7 @@ async function startServer() {
     if (error) throw error;
     console.log('Connected to Supabase');
     
-    await ensureRecycleBinColumn();
-    await cleanupExpiredFiles();
-
-    // Periodic cleanup every 30 minutes
-    setInterval(cleanupExpiredFiles, 30 * 60 * 1000);
+    console.log('Recycle bin active (using is_public flag)');
 
     const server = app.listen(PORT, '0.0.0.0', () => {
       console.log(`Server running on port ${PORT}`);

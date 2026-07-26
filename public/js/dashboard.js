@@ -27,6 +27,7 @@ const toolbar = $('toolbar');
 const selectionCount = $('selectionCount');
 const selectedCount = $('selectedCount');
 const recycleBinBtn = $('recycleBinBtn');
+const recycleBadge = $('recycleBadge');
 
 function formatBytes(bytes) {
   if (bytes === 0) return '0 B';
@@ -46,14 +47,6 @@ function getFileIcon(m) {
   if (m.includes('zip') || m.includes('rar') || m.includes('tar') || m.includes('gzip') || m.includes('7z')) return 'fa-file-archive';
   if (m.includes('json') || m.includes('javascript') || m.includes('typescript') || m.includes('xml') || m.includes('html') || m.includes('css')) return 'fa-file-code';
   return 'fa-file';
-}
-
-function timeRemaining(deletedAt) {
-  const ms = new Date(deletedAt).getTime() + 2 * 24 * 60 * 60 * 1000 - Date.now();
-  if (ms <= 0) return 'Expired';
-  const h = Math.floor(ms / 3600000);
-  const m = Math.floor((ms % 3600000) / 60000);
-  return `${h}h ${m}m remaining`;
 }
 
 async function api(url, options = {}) {
@@ -90,6 +83,7 @@ async function reloadAll() {
   await Promise.all([loadFiles(), loadFolders(), loadUser()]);
   if (currentFolder !== 'root') await updateBreadcrumb();
   else breadcrumb.innerHTML = '';
+  loadRecycleCount();
 }
 
 async function loadUser() {
@@ -163,13 +157,11 @@ function renderFiles(files) {
   fileGrid.innerHTML = files.map(f => {
     const sb = f.path === null ? '<span class="status-badge processing">Processing</span>' : f.path === 'failed' ? '<span class="status-badge failed">Failed</span>' : '';
     if (_recycleView) {
-      const expires = timeRemaining(f.deleted_at);
-      const isFolder = f._type === 'folder' || !f.mime_type || f.mime_type === 'folder';
-      return `<div class="file-item recycle-item${selectedItems.has(f.id)?' selected':''}" data-id="${f.id}" data-type="${isFolder?'folder':'file'}">
+      return `<div class="file-item recycle-item${selectedItems.has(f.id)?' selected':''}" data-id="${f.id}" data-type="file">
         <input type="checkbox" class="file-checkbox" ${selectedItems.has(f.id)?'checked':''}>
-        <i class="file-icon fas ${isFolder?'fa-folder':'fa-file'}"></i>
-        <div class="file-name" title="${esc(f.original_name||f.name)}">${esc(f.original_name||f.name)}</div>
-        <div class="file-meta">${isFolder?'<span class="storage-badge" style="background:rgba(234,179,8,0.12);color:var(--warning);">Folder</span>':formatBytes(f.size)} <span class="expiry-badge ${expires==='Expired'?'expired':''}">${expires}</span></div>
+        <i class="file-icon fas fa-file"></i>
+        <div class="file-name" title="${esc(f.original_name)}">${esc(f.original_name)}</div>
+        <div class="file-meta">${formatBytes(f.size)}</div>
       </div>`;
     }
     return `<div class="file-item${selectedItems.has(f.id)?' selected':''}${!f.path||f.path==='failed'?' disabled':''}" data-id="${f.id}" data-type="file">
@@ -254,13 +246,7 @@ async function deleteSelected() {
     _busy = true;
     deleteSelectedBtn.disabled = true;
     try {
-      const ids = Array.from(selectedItems);
-      await Promise.all(ids.map(id => {
-        const el = fileGrid.querySelector(`[data-id="${id}"]`);
-        return el?.dataset?.type === 'folder'
-          ? api(`/folders/${id}/forever`, { method: 'DELETE' })
-          : api(`/files/${id}/forever`, { method: 'DELETE' });
-      }));
+      await Promise.all(Array.from(selectedItems).map(id => api(`/files/${id}/forever`, { method: 'DELETE' })));
       clearSelection();
       showRecycleBin();
     } catch (e) { alert('Delete failed: ' + e.message); }
@@ -283,13 +269,7 @@ async function restoreSelected() {
   _busy = true;
   moveSelectedBtn.disabled = true;
   try {
-    const ids = Array.from(selectedItems);
-    await Promise.all(ids.map(id => {
-      const el = fileGrid.querySelector(`[data-id="${id}"]`);
-      return el?.dataset?.type === 'folder'
-        ? api(`/folders/${id}/restore`, { method: 'POST' })
-        : api(`/files/${id}/restore`, { method: 'POST' });
-    }));
+    await Promise.all(Array.from(selectedItems).map(id => api(`/files/${id}/restore`, { method: 'POST' })));
     clearSelection();
     showRecycleBin();
   } catch (e) { alert('Restore failed: ' + e.message); }
@@ -318,24 +298,31 @@ async function showRecycleBin() {
   pagination.classList.add('hidden');
   try {
     showLoading();
-    const { files, folders } = await api('/files/recycle');
+    const { files } = await api('/files/recycle');
     emptyState.querySelector('h3').textContent = 'Recycle Bin is empty';
-    emptyState.querySelector('p').textContent = 'Deleted files appear here for 2 days';
+    emptyState.querySelector('p').textContent = 'Deleted files appear here until permanently removed';
     $('emptyUploadBtn').classList.add('hidden');
-    const items = [
-      ...(folders || []).map(f => ({ ...f, original_name: f.name, mime_type: 'folder', size: 0, _type: 'folder' })),
-      ...(files || []).map(f => ({ ...f, _type: 'file' }))
-    ];
+    const items = (files || []).map(f => ({ ...f, _type: 'file' }));
     renderFiles(items);
+    loadRecycleCount();
   } catch { showError('Failed to load recycle bin'); }
+}
+
+async function loadRecycleCount() {
+  try {
+    const { files } = await api('/files/recycle');
+    const n = files?.length || 0;
+    if (recycleBadge) {
+      recycleBadge.textContent = n;
+      recycleBadge.classList.toggle('hidden', n === 0);
+    }
+  } catch {}
 }
 
 recycleBinBtn?.addEventListener('click', showRecycleBin);
 
 function showRecycleContextMenu(e, id) {
   e.preventDefault();
-  const item = document.querySelector(`[data-id="${id}"]`);
-  const isFolder = item?.dataset?.type === 'folder';
   document.querySelector('.context-menu')?.remove();
   const menu = document.createElement('div');
   menu.className = 'context-menu';
@@ -345,32 +332,9 @@ function showRecycleContextMenu(e, id) {
     <button class="context-menu-item danger" data-action="delete"><i class="fas fa-trash"></i> Delete Forever</button>`;
   document.body.appendChild(menu);
   menu.querySelectorAll('.context-menu-item').forEach(btn => {
-    btn.addEventListener('click', () => { menu.remove(); const a = btn.dataset.action; if (a === 'restore') restoreItem(id, isFolder); else if (a === 'delete') permanentDeleteItem(id, isFolder); });
+    btn.addEventListener('click', () => { menu.remove(); const a = btn.dataset.action; if (a === 'restore') { api(`/files/${id}/restore`, { method: 'POST' }).then(() => showRecycleBin()); } else if (a === 'delete') { if (confirm('Permanently delete this file? This cannot be undone.')) api(`/files/${id}/forever`, { method: 'DELETE' }).then(() => showRecycleBin()); } });
   });
   document.addEventListener('click', function cm() { menu.remove(); document.removeEventListener('click', cm); }, { once: true });
-}
-
-async function restoreItem(id, isFolder) {
-  if (_busy) return;
-  _busy = true;
-  try {
-    if (isFolder) await api(`/folders/${id}/restore`, { method: 'POST' });
-    else await api(`/files/${id}/restore`, { method: 'POST' });
-    showRecycleBin();
-  } catch (e) { showError(e.message); }
-  _busy = false;
-}
-
-async function permanentDeleteItem(id, isFolder) {
-  if (_busy) return;
-  if (!confirm('Permanently delete this item? This cannot be undone.')) return;
-  _busy = true;
-  try {
-    if (isFolder) await api(`/folders/${id}/forever`, { method: 'DELETE' });
-    else await api(`/files/${id}/forever`, { method: 'DELETE' });
-    showRecycleBin();
-  } catch (e) { showError(e.message); }
-  _busy = false;
 }
 
 async function restoreFile(id) {
@@ -827,5 +791,5 @@ document.addEventListener('drop', e => {
     $('themeToggle').innerHTML = saved === 'dark' ? '<i class="fas fa-moon"></i>' : '<i class="fas fa-sun"></i>';
   })();
   try { const cfg = await (await fetch('/api/config')).json(); if (backendSelect && cfg.defaultStorageBackend) backendSelect.value = cfg.defaultStorageBackend; } catch {}
-  loadUser(); loadFolders(); loadFiles();
+  loadUser(); loadFolders(); loadFiles(); loadRecycleCount();
 })();

@@ -240,6 +240,8 @@ body {
 .folder-item-content i { color: var(--warning); width: 16px; text-align: center; font-size: 13px; }
 .folder-item-content .fa-home { color: var(--primary); }
 .folder-children { margin-left: 18px; border-left: 1px solid var(--border); padding-left: 6px; list-style: none; }
+.recycle-badge { margin-left: auto; font-size: 11px; padding: 0 7px; border-radius: 10px; background: var(--danger); color: #fff; font-weight: 600; min-width: 18px; text-align: center; line-height: 18px; }
+.folder-item:hover .recycle-badge { background: var(--danger); }
 
 .content { flex: 1; padding: 16px; overflow-y: auto; min-width: 0; position: relative; }
 .toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }

@@ -69,62 +69,18 @@ exports.deleteFolder = async (req, res, next) => {
       return next(new AppError('Folder not found', 404));
     }
 
-    const sup = require('../lib/supabase');
-
     if (mode === 'move') {
+      const sup = require('../lib/supabase');
       const { data: files } = await sup.from('guha_cloud_files').select('id').eq('folder_id', req.params.id);
       await Promise.all((files || []).map(f => File.update(f.id, { folder_id: null })));
       await Folder.delete(req.params.id);
       return res.json({ message: 'Folder deleted, files moved to root' });
     }
 
-    // Soft-delete folder and all contents (files + subfolders) — they go to recycle bin
-    await Folder.softDelete(req.params.id);
+    // Soft-delete all files inside, then delete folder permanently
+    await Folder.softDeleteContents(req.params.id);
 
-    res.json({ message: 'Folder and files moved to recycle bin' });
-  } catch (error) {
-    next(error);
-  }
-};
-
-exports.restoreFolder = async (req, res, next) => {
-  try {
-    const folder = await Folder.findById(req.params.id);
-    if (!folder || folder.owner_id !== req.user.id) {
-      return next(new AppError('Folder not found', 404));
-    }
-    if (!folder.deleted_at) {
-      return next(new AppError('Folder is not in recycle bin', 400));
-    }
-    await Folder.restore(req.params.id);
-    res.json({ message: 'Folder restored successfully' });
-  } catch (error) {
-    next(error);
-  }
-};
-
-async function deleteFolderRecursive(folderId) {
-  const sup = require('../lib/supabase');
-  const storage = require('../services/storage');
-  const { data: files } = await sup.from('guha_cloud_files').select('*').eq('folder_id', folderId);
-  await Promise.allSettled((files || []).map(f => storage.deleteFile(f).catch(() => {})));
-  await sup.from('guha_cloud_files').delete().eq('folder_id', folderId);
-  const { data: children } = await sup.from('guha_cloud_folders').select('id').eq('parent_id', folderId);
-  await Promise.all((children || []).map(c => deleteFolderRecursive(c.id)));
-  await Folder.hardDelete(folderId);
-}
-
-exports.permanentDeleteFolder = async (req, res, next) => {
-  try {
-    const folder = await Folder.findById(req.params.id);
-    if (!folder || folder.owner_id !== req.user.id) {
-      return next(new AppError('Folder not found', 404));
-    }
-    if (!folder.deleted_at) {
-      return next(new AppError('Folder is not in recycle bin', 400));
-    }
-    await deleteFolderRecursive(req.params.id);
-    res.json({ message: 'Folder permanently deleted' });
+    res.json({ message: 'Folder deleted, files moved to recycle bin' });
   } catch (error) {
     next(error);
   }
@@ -162,10 +118,8 @@ exports.moveFolder = async (req, res, next) => {
     await Folder.update(folder.id, { parent_id: targetParentId || null, path: newPath });
 
     if (oldParent) {
-      // Could update children count on old parent if needed
     }
     if (targetParentId) {
-      // Could update children count on new parent if needed
     }
 
     res.json({ folder });

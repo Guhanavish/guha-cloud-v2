@@ -145,11 +145,8 @@ exports.deleteFile = async (req, res, next) => {
 
 exports.getRecycleBin = async (req, res, next) => {
   try {
-    const [files, folders] = await Promise.all([
-      File.getRecycleBin(req.user.id),
-      Folder.getRecycleBin(req.user.id)
-    ]);
-    res.json({ files, folders });
+    const files = await File.getRecycleBin(req.user.id);
+    res.json({ files });
   } catch (error) {
     next(error);
   }

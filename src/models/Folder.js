@@ -1,14 +1,6 @@
 const supabase = require('../lib/supabase');
 const storage = require('../services/storage');
 
-let _hasDeletedAt = null;
-async function _checkDeletedAt() {
-  if (_hasDeletedAt !== null) return _hasDeletedAt;
-  const { error } = await supabase.from('guha_cloud_folders').select('deleted_at').limit(1);
-  _hasDeletedAt = !error;
-  return _hasDeletedAt;
-}
-
 const Folder = {
   async create({ name, owner }) {
     const { data, error } = await supabase
@@ -21,10 +13,11 @@ const Folder = {
   },
 
   async findByOwner(ownerId, parentId = null) {
-    let query = supabase.from('guha_cloud_folders').select('*').eq('owner_id', ownerId);
-    if (await _checkDeletedAt()) query = query.is('deleted_at', null);
-    query = query.order('name');
-    const { data, error } = await query;
+    const { data, error } = await supabase
+      .from('guha_cloud_folders')
+      .select('*')
+      .eq('owner_id', ownerId)
+      .order('name');
     if (error) throw error;
     return data;
   },
@@ -50,71 +43,6 @@ const Folder = {
       .single();
     if (error) throw error;
     return data;
-  },
-
-  async softDelete(id) {
-    const { data: children } = await supabase.from('guha_cloud_folders').select('id').eq('parent_id', id);
-    await Promise.all((children || []).map(c => this.softDelete(c.id)));
-    const { data: files } = await supabase.from('guha_cloud_files').select('id').eq('folder_id', id);
-    await Promise.all((files || []).map(f => {
-      const File = require('./File');
-      return File.softDelete(f.id);
-    }));
-    try {
-      const { error } = await supabase.from('guha_cloud_folders').update({ deleted_at: new Date().toISOString() }).eq('id', id);
-      if (error) throw error;
-      _hasDeletedAt = true;
-    } catch {
-      _hasDeletedAt = false;
-      // Fallback: hard delete the folder and its files
-      const { data: f2 } = await supabase.from('guha_cloud_files').select('*').eq('folder_id', id);
-      await Promise.allSettled((f2 || []).map(f => storage.deleteFile(f).catch(() => {})));
-      await supabase.from('guha_cloud_files').delete().eq('folder_id', id);
-      await supabase.from('guha_cloud_folders').delete().eq('id', id);
-    }
-  },
-
-  async restore(id) {
-    if (!(await _checkDeletedAt())) throw new Error('Recycle bin not available');
-    const { data: children } = await supabase.from('guha_cloud_folders').select('id').eq('parent_id', id).not('deleted_at', 'is', null);
-    await Promise.all((children || []).map(c => this.restore(c.id)));
-    await supabase.from('guha_cloud_files').update({ deleted_at: null }).eq('folder_id', id).is('deleted_at', 'not', null);
-    await supabase.from('guha_cloud_folders').update({ deleted_at: null }).eq('id', id);
-  },
-
-  async getRecycleBin(ownerId) {
-    if (!(await _checkDeletedAt())) return [];
-    let query = supabase.from('guha_cloud_folders').select('*');
-    if (ownerId !== '__ALL__') query = query.eq('owner_id', ownerId);
-    query = query.not('deleted_at', 'is', null).order('deleted_at', { ascending: false });
-    const { data, error } = await query;
-    if (error) throw error;
-    return data || [];
-  },
-
-  async cleanupExpired() {
-    if (!(await _checkDeletedAt())) return 0;
-    const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString();
-    const { data: expired, error } = await supabase
-      .from('guha_cloud_folders')
-      .select('id')
-      .lt('deleted_at', twoDaysAgo);
-    if (error) throw error;
-    for (const f of expired || []) {
-      const { data: files } = await supabase.from('guha_cloud_files').select('*').eq('folder_id', f.id);
-      await Promise.allSettled((files || []).map(ff => {
-        const s = require('../services/storage');
-        return s.deleteFile(ff).catch(() => {});
-      }));
-      const { data: children } = await supabase.from('guha_cloud_folders').select('id').eq('parent_id', f.id);
-      for (const c of children || []) {
-        await supabase.from('guha_cloud_files').delete().eq('folder_id', c.id);
-        await supabase.from('guha_cloud_folders').delete().eq('id', c.id);
-      }
-      await supabase.from('guha_cloud_files').delete().eq('folder_id', f.id);
-      await supabase.from('guha_cloud_folders').delete().eq('id', f.id);
-    }
-    return (expired || []).length;
   },
 
   async hardDelete(id) {
@@ -143,12 +71,20 @@ const Folder = {
     return totalDeleted;
   },
 
+  async softDeleteContents(id) {
+    const { data: files } = await supabase.from('guha_cloud_files').select('id').eq('folder_id', id);
+    const File = require('./File');
+    await Promise.all((files || []).map(f => File.softDelete(f.id)));
+    const { data: children } = await supabase.from('guha_cloud_folders').select('id').eq('parent_id', id);
+    for (const c of children || []) await this.softDeleteContents(c.id);
+    await supabase.from('guha_cloud_folders').delete().eq('id', id);
+  },
+
   async move(id, newParentId) {
     if (id === newParentId) {
       throw new Error('Cannot move folder into itself');
     }
 
-    // Check for circular reference
     let current = await this.findById(newParentId);
     while (current) {
       if (current.id === id) {

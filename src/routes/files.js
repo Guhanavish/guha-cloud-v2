@@ -26,8 +26,6 @@ router.get('/folders', folderController.getFolders);
 router.get('/folders/:id', idParamValidation, folderController.getFolder);
 router.put('/folders/:id', idParamValidation, folderValidation, folderController.updateFolder);
 router.put('/folders/:id/move', idParamValidation, moveValidation, folderController.moveFolder);
-router.post('/folders/:id/restore', idParamValidation, folderController.restoreFolder);
-router.delete('/folders/:id/forever', idParamValidation, folderController.permanentDeleteFolder);
 router.delete('/folders/:id', idParamValidation, folderController.deleteFolder);
 
 module.exports = router;
