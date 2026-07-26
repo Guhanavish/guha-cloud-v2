@@ -93,10 +93,6 @@ exports.changePassword = async (req, res, next) => {
       return next(new AppError('Current and new password required', 400));
     }
 
-    if (newPassword.length < 8) {
-      return next(new AppError('New password must be at least 8 characters', 400));
-    }
-
     const user = await User.findByIdWithPassword(req.user.id);
     const isMatch = await bcrypt.compare(currentPassword, user.password_hash);
     
@@ -122,9 +118,6 @@ exports.changeUsername = async (req, res, next) => {
     }
 
     const trimmed = username.trim();
-    if (trimmed.length < 3 || trimmed.length > 30) {
-      return next(new AppError('Username must be 3-30 characters', 400));
-    }
     if (!/^[a-zA-Z0-9_]+$/.test(trimmed)) {
       return next(new AppError('Username can only contain letters, numbers, and underscores', 400));
     }

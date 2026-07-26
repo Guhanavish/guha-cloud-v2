@@ -16,8 +16,8 @@ const isUUID = (value) => {
 exports.registerValidation = [
   body('username')
     .trim()
-    .isLength({ min: 3, max: 30 })
-    .withMessage('Username must be 3-30 characters')
+    .notEmpty()
+    .withMessage('Username is required')
     .matches(/^[a-zA-Z0-9_]+$/)
     .withMessage('Username can only contain letters, numbers, and underscores'),
   body('email')
