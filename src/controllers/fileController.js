@@ -158,7 +158,7 @@ exports.restoreFile = async (req, res, next) => {
     if (!fileRecord || fileRecord.owner_id !== req.user.id) {
       return next(new AppError('File not found', 404));
     }
-    if (!fileRecord.deleted_at) {
+    if (!fileRecord.is_public) {
       return next(new AppError('File is not in recycle bin', 400));
     }
 
